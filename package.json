@@ -1,0 +1,13 @@
+{
+  "name": "@unabandoned/.github",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Org-level defaults for the unabandoned maintained-fork program: reusable workflows, community-health files, and shared config templates.",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0"
+  }
+}

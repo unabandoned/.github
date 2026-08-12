@@ -1,0 +1,33 @@
+name: reusable-scorecard
+
+# Shared OpenSSF Scorecard analysis. Results upload to the Security tab and to
+# the public Scorecard API (feeds the security:openssf-scorecard Renovate rule
+# in the shared preset). Callers trigger on a weekly schedule + push to default.
+# Action refs use major-version tags; Renovate pins them to digests on first run.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

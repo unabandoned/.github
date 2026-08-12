@@ -1,0 +1,31 @@
+name: reusable-release-cut
+
+# Monthly release: merge whatever release-please has accumulated. Routine
+# dependency bumps (auto-merged nightly by Renovate) ship here; security fixes
+# ship earlier via reusable-release-security.yml. Callers own the schedule.
+on:
+  workflow_call:
+    secrets:
+      PAT:
+        description: 'Org PAT used to squash-merge the pending release PR.'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the pending release-please PR
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --search 'label:"autorelease: pending" state:open' --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            echo "Cutting monthly release: merging release PR #$pr"
+            gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --squash --admin
+          else
+            echo "No pending release PR; nothing to cut this month."
+          fi

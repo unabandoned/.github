@@ -1,0 +1,39 @@
+name: reusable-release-security
+
+# CVE fast-path: when a Renovate vulnerability-fix PR (labelled `security`) is
+# merged, cut an out-of-cycle release immediately instead of waiting for the
+# monthly release-cut. Callers trigger this on `pull_request: [closed]` and
+# gate on the merged + `security`-label condition below.
+on:
+  workflow_call:
+    secrets:
+      PAT:
+        description: 'Org PAT used to refresh and merge the release PR.'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  security-release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'security')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh the release PR so it includes the security fix
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.PAT }}
+      - name: Cut an out-of-cycle release
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --search 'label:"autorelease: pending" state:open' --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            echo "Security fix merged; cutting out-of-cycle release PR #$pr"
+            gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --squash --admin
+          else
+            echo "No pending release PR to cut."
+          fi

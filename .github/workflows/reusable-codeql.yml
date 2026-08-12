@@ -1,0 +1,31 @@
+name: reusable-codeql
+
+# Shared CodeQL analysis for JS/TS forks. Callers trigger on push/PR/schedule.
+# Action refs use major-version tags; Renovate (helpers:pinGitHubActionDigests-
+# ToSemver, inherited from the shared preset) pins them to digests on first run.
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: 'CodeQL languages to analyze (comma-separated).'
+        type: string
+        default: 'javascript-typescript'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ inputs.languages }}
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

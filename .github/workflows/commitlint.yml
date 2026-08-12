@@ -1,0 +1,12 @@
+name: commitlint
+
+# This repo dogfoods its own reusable commitlint workflow.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    uses: ./.github/workflows/reusable-commitlint.yml

@@ -1,0 +1,4 @@
+# Org-wide default code owners for every unabandoned/* repository that does not
+# define its own CODEOWNERS. Update the owner below to the actual maintainer
+# handle or team (e.g. @unabandoned/maintainers) once it exists.
+* @unabandoned/maintainers

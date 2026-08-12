@@ -1,0 +1,78 @@
+name: reusable-publish
+
+# Self-bootstrapping OIDC-or-token publish, hardened against the dev tree.
+#
+# The token-holding job never installs the dev tree unless a caller opts in
+# (`install-for-publish: true`), and every `npm publish` runs with
+# `--ignore-scripts` so no lifecycle/install script executes beside the npm
+# token. `vars.OIDC_ENABLED` and the secrets resolve against the CALLER repo.
+#
+# The caller MUST grant `id-token: write` on the job that calls this workflow.
+on:
+  workflow_call:
+    inputs:
+      install-for-publish:
+        description: 'Run `npm install` before packing (forks that build at publish time).'
+        type: boolean
+        default: false
+    secrets:
+      NPM_SECRET:
+        description: 'Granular npm token (packages read/write). Token-publish fallback only.'
+        required: true
+      PAT:
+        description: 'Org PAT used to flip OIDC_ENABLED once OIDC works.'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # OIDC trusted publishing requires npm >= 11.5.1.
+      - run: npm install -g npm@latest
+      # Only install the dev tree when the fork needs it to pack. Forks that
+      # ship committed source/build output skip this, keeping the dev tree away
+      # from the token.
+      - if: ${{ inputs.install-for-publish }}
+        run: npm install
+
+      # ---- Steady state: OIDC configured (flag set) -> tokenless publish ----
+      - name: Publish via OIDC
+        if: vars.OIDC_ENABLED == 'true'
+        run: npm publish --provenance --access public --ignore-scripts
+
+      # ---- Bootstrap (flag not set): try OIDC, fall back to token ----
+      # Trusted publishing must be configured by a human via `npm trust`
+      # (2FA-gated; CI tokens are rejected), so CI never runs it. Instead we
+      # try OIDC on every release until it works, then flip the flag.
+      - name: Try OIDC publish
+        id: oidc_try
+        if: vars.OIDC_ENABLED != 'true'
+        continue-on-error: true
+        run: npm publish --provenance --access public --ignore-scripts
+
+      - name: Bootstrap publish with token (OIDC not enabled yet)
+        if: vars.OIDC_ENABLED != 'true' && steps.oidc_try.outcome == 'failure'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
+        run: |
+          set -eu
+          echo "OIDC not available yet; publishing with NPM_SECRET."
+          echo "To enable OIDC, run this once locally with a 2FA-enabled account:"
+          echo "  npm trust github --repo $GITHUB_REPOSITORY --file publish.yml --allow-publish"
+          echo "After that, the next release publishes via OIDC and sets OIDC_ENABLED automatically."
+          npm publish --provenance --access public --ignore-scripts
+
+      - name: Record OIDC flag (OIDC worked -> trusted publishing is live)
+        if: vars.OIDC_ENABLED != 'true' && steps.oidc_try.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: gh variable set OIDC_ENABLED --repo "$GITHUB_REPOSITORY" --body true

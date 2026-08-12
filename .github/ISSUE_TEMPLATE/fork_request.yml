@@ -1,0 +1,38 @@
+name: Fork request
+description: Propose adopting an abandoned npm package as an @unabandoned/* fork.
+labels: [fork-request]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The fork trigger is **abandonment + at least one outdated dependency**. An abandoned
+        package whose tree is already fully current is left alone.
+  - type: input
+    id: package
+    attributes:
+      label: Package
+      description: The npm package and repository you propose forking.
+      placeholder: e.g. left-pad (https://github.com/stevemao/left-pad)
+    validations:
+      required: true
+  - type: textarea
+    id: abandonment
+    attributes:
+      label: Evidence of abandonment
+      description: Last release/commit date, open-but-ignored PRs, archived repo, maintainer notice, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: outdated
+    attributes:
+      label: Outdated dependencies
+      description: Output of `npm outdated` (or the Renovate dashboard) showing stale deps in the tree.
+    validations:
+      required: true
+  - type: textarea
+    id: consumers
+    attributes:
+      label: Why it matters
+      description: Which of our consumers pull this (directly or transitively)? Any known CVEs?
+    validations:
+      required: false
