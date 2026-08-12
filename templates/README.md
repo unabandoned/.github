@@ -29,6 +29,8 @@ on:
   pull_request:
 jobs:
   ci:
+    permissions:
+      contents: read
     uses: unabandoned/.github/.github/workflows/reusable-ci.yml@main
     with:
       node-versions: '[20, 22, 24]'
@@ -43,6 +45,8 @@ on:
   pull_request:
 jobs:
   commitlint:
+    permissions:
+      contents: read
     uses: unabandoned/.github/.github/workflows/reusable-commitlint.yml@main
 ```
 
@@ -76,6 +80,9 @@ on:
     branches: [master]
 jobs:
   release-please:
+    permissions:
+      contents: write
+      pull-requests: write
     uses: unabandoned/.github/.github/workflows/reusable-release-please.yml@main
     secrets: inherit
 ```
@@ -90,6 +97,9 @@ on:
   workflow_dispatch:
 jobs:
   cut:
+    permissions:
+      contents: write
+      pull-requests: write
     uses: unabandoned/.github/.github/workflows/reusable-release-cut.yml@main
     secrets: inherit
 ```
@@ -103,6 +113,9 @@ on:
     types: [closed]
 jobs:
   security-release:
+    permissions:
+      contents: write
+      pull-requests: write
     uses: unabandoned/.github/.github/workflows/reusable-release-security.yml@main
     secrets: inherit
 ```
