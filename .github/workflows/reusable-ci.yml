@@ -1,0 +1,35 @@
+name: reusable-ci
+
+# Shared CI for every @unabandoned/* fork. Callers set the Node matrix and
+# whether a build step runs before the test suite.
+on:
+  workflow_call:
+    inputs:
+      node-versions:
+        description: 'JSON array of Node.js major versions to test against.'
+        type: string
+        default: '[20, 22, 24]'
+      has-build:
+        description: 'Run `npm run build` before the test suite (TS/compiled forks).'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ${{ fromJSON(inputs.node-versions) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - if: ${{ inputs.has-build }}
+        run: npm run build
+      - run: npm test

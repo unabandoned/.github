@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a defect in an @unabandoned/* fork (behaviour differs from upstream, build, or publish issue).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For **security vulnerabilities**, stop here and follow our
+        [security policy](https://github.com/unabandoned/.github/blob/main/SECURITY.md) instead.
+  - type: input
+    id: package
+    attributes:
+      label: Package and version
+      description: e.g. "@unabandoned/events@3.3.2"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: e.g. 22.14.0
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead? Include the full error if any.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps or a code snippet that reproduces the problem.
+    validations:
+      required: true
+  - type: checkboxes
+    id: upstream
+    attributes:
+      label: Upstream check
+      options:
+        - label: This behaviour is specific to the fork (it works, or is not reported, upstream).

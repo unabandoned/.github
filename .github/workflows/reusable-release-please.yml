@@ -1,0 +1,56 @@
+name: reusable-release-please
+
+# Runs release-please in manifest mode. Each fork keeps its own
+# `release-please-config.json` (canonical changelog-sections live in
+# templates/release-please-config.json here) and `.release-please-manifest.json`.
+#
+# release-please can't emit collapsible sections, so the post-step folds the
+# "Dependencies & maintenance" section into a <details> in the GitHub release,
+# keeping consumer-facing changes (Features/Bug Fixes) front and centre.
+on:
+  workflow_call:
+    secrets:
+      PAT:
+        description: 'Org PAT used by release-please to open/refresh the release PR.'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.PAT }}
+
+      - name: Fold dependency notes in the release
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          python3 - "$TAG" <<'PY'
+          import os, subprocess, sys, re
+          tag = sys.argv[1]; repo = os.environ["GITHUB_REPOSITORY"]
+          FOLD = "Dependencies & maintenance"
+          body = subprocess.check_output(
+              ["gh","release","view",tag,"-R",repo,"--json","body","-q",".body"], text=True)
+          parts = re.split(r'(?m)^(?=### )', body)
+          head, sections = parts[0], parts[1:]
+          keep = [s for s in sections if s.splitlines()[0][4:].strip() != FOLD]
+          fold = [s for s in sections if s.splitlines()[0][4:].strip() == FOLD]
+          if fold:
+              new = (head + "".join(keep).rstrip()
+                     + "\n\n<details>\n<summary>\U0001F4E6 " + FOLD + "</summary>\n\n"
+                     + "".join(fold).rstrip() + "\n\n</details>\n")
+              if new != body:
+                  subprocess.run(["gh","release","edit",tag,"-R",repo,"--notes",new], check=True)
+                  print("Folded dependency notes for", tag)
+          else:
+              print("No dependency section to fold.")
+          PY
