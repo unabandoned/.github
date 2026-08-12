@@ -119,6 +119,10 @@ on:
     - cron: '0 6 * * 1'
 jobs:
   codeql:
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     uses: unabandoned/.github/.github/workflows/reusable-codeql.yml@main
 ```
 
@@ -134,6 +138,10 @@ on:
     branches: [master]
 jobs:
   scorecard:
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
     uses: unabandoned/.github/.github/workflows/reusable-scorecard.yml@main
 ```
 
