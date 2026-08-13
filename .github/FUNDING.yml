@@ -1,4 +1,3 @@
 # Org-wide funding defaults. A fork may override this with its own
-# .github/FUNDING.yml (e.g. a package-specific Tidelift entry like `npm/events`).
-tidelift: # e.g. npm/<package> — set per-package in the fork's own FUNDING.yml
+# .github/FUNDING.yml.
 github: # up to 4 GitHub Sponsors usernames, e.g. [unabandoned]
