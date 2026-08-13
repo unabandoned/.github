@@ -31,6 +31,12 @@ near zero.
 
 ## Release model
 
+- **Squash-merge, title-driven.** Every PR is squash-merged, so the PR **title** is the
+  Conventional Commit release-please reads — keep one logical change per PR, and put the
+  release signal in the title (`feat!` for a breaking major). Body-only footers (`Release-As:`,
+  long-form `BREAKING CHANGE:`) only survive the squash if the repo's squash message is set to
+  "title and description", so prefer release-please config (e.g. `bump-minor-pre-major`) for a
+  deliberate version override.
 - **Renovate merges nightly** — automerge once CI is green, after soaking new releases.
 - **Publish monthly** — `release-cut` squash-merges the pending release-please PR (labelled
   `autorelease: pending`) on the 1st of each month (`cron: '0 6 1 * *'`) or on manual dispatch.

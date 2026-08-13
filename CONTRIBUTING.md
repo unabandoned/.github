@@ -29,6 +29,26 @@ bumps; a bump that fixes a CVE should carry the `security` label so it ships on 
 3. Write Conventional-Commit messages.
 4. Open the PR; CI (test matrix, commitlint, CodeQL, Scorecard) runs automatically.
 
+## Merging
+
+PRs are **squash-merged**, and release-please is **title-driven**: the squash commit's
+subject is the PR title, so the title *is* the Conventional Commit that release-please reads
+to compute the next version and changelog entry. Two rules follow:
+
+- **One logical change per PR.** A squash collapses every commit on the branch into a single
+  changelog entry keyed off the title, so a PR that bundles (say) a `fix(deps)` bump with a
+  `feat!` change silently loses the bump's entry. Split unrelated changes into separate PRs.
+- **Put the release signal in the title, not just the body.** Mark breaking changes with `!`
+  in the title (`feat!: …`) — that is what release-please reads. Body-only footers such as
+  `Release-As:` and the long-form `BREAKING CHANGE:` description survive the squash *only* if
+  the repo's squash message is set to "Pull request title and description"; when you need a
+  deliberate version, steer it through release-please config (e.g. `bump-minor-pre-major`)
+  rather than relying on a footer.
+
+> **Repo setting.** Under **Settings → General → Pull Requests**, allow only **squash
+> merging** and set the default squash commit message to **"Pull request title and
+> description"** so description footers reach release-please.
+
 ## Adding a new fork
 
 New forks follow the shared template so they inherit the whole pipeline:
