@@ -1,0 +1,30 @@
+name: reusable-renovate-config
+
+# Shared Renovate config validation for every @unabandoned repo. Runs
+# Renovate's own validator in --strict mode so a malformed config file
+# can't slip through on a bot- or Claude-authored PR and silently halt
+# Renovate across the fork. Callers pass the config file(s) to check;
+# defaults to the fork's root renovate.json.
+on:
+  workflow_call:
+    inputs:
+      config-files:
+        description: 'Space-separated Renovate config files to validate.'
+        type: string
+        default: 'renovate.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Validate Renovate config
+        env:
+          CONFIG_FILES: ${{ inputs.config-files }}
+        run: npx --yes --package renovate -- renovate-config-validator --strict $CONFIG_FILES
