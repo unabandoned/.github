@@ -13,12 +13,9 @@ upgrade to the latest major to receive security updates.
 
 Please report vulnerabilities **privately** — do not open a public issue for a security bug.
 
-1. **GitHub private advisory (preferred).** Open a draft security advisory on the affected
-   repository via its **Security → Advisories → Report a vulnerability** tab. This keeps the
-   report private while we coordinate a fix.
-2. **Tidelift.** For packages covered by a Tidelift subscription, use the
-   [Tidelift security contact](https://tidelift.com/security); Tidelift coordinates the fix
-   and disclosure.
+Open a draft security advisory on the affected repository via its
+**Security → Advisories → Report a vulnerability** tab. This keeps the report private while
+we coordinate a fix.
 
 Please include the affected package and version, a description of the issue, and a
 reproduction or proof-of-concept if you have one.
