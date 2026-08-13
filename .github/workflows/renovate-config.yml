@@ -1,0 +1,14 @@
+name: renovate-config
+
+# This repo dogfoods its own reusable Renovate config validator.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  renovate-config:
+    uses: ./.github/workflows/reusable-renovate-config.yml
