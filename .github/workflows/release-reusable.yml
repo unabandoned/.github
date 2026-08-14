@@ -1,0 +1,72 @@
+name: release-reusable
+
+# Publish a versioned, auto-published GitHub Release + tag for the reusable
+# workflows whenever they - or the files they bundle into a run - change on
+# main, and ONLY then. Forks pin the reusable workflows to these tags, so an
+# unrelated commit to this repo (docs, dashboard, templates, profile) no longer
+# mints a new digest that churns a bump PR across every fork.
+#
+# The version bump is derived from the head commit subject (Conventional
+# Commits): `feat!:` / `BREAKING CHANGE` -> major, `feat:` -> minor, anything
+# else -> patch. A floating major tag (e.g. v1) is moved to each release so a
+# caller may track a major line if it prefers.
+#
+# Trigger paths: the reusable-*.yml definitions, plus every non-workflow file a
+# reusable workflow checks out and runs at its pinned version. Today that is
+# scripts/validate_metadata.py (bundled by reusable-ci). Add new bundled files
+# here when a reusable workflow starts depending on them.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reusable-*.yml'
+      - 'scripts/validate_metadata.py'
+
+concurrency:
+  group: release-reusable
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Compute next version and cut the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1 || true)"
+          latest="${latest:-v0.0.0}"
+          ver="${latest#v}"
+          major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"; patch="${rest##*.}"
+
+          subject="$(printf '%s\n' "$HEAD_MSG" | head -n1)"
+          if printf '%s' "$HEAD_MSG" | grep -qE 'BREAKING CHANGE:' \
+             || printf '%s' "$subject" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+            major=$((major + 1)); minor=0; patch=0
+          elif printf '%s' "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          new="v${major}.${minor}.${patch}"
+
+          if git rev-parse -q --verify "refs/tags/${new}" >/dev/null; then
+            echo "Tag ${new} already exists; nothing to do."
+            exit 0
+          fi
+
+          echo "Releasing ${new} (previous ${latest}) from ${GITHUB_SHA}"
+          git tag -a "${new}" -m "${new}"
+          git tag -f -a "v${major}" -m "v${major}"
+          git push origin "refs/tags/${new}"
+          git push -f origin "refs/tags/v${major}"
+          gh release create "${new}" --title "${new}" --generate-notes
