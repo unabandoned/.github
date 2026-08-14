@@ -27,5 +27,14 @@ jobs:
         uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           languages: ${{ inputs.languages }}
+          # Analyze the shipped library code, not the test tree. Fork test
+          # suites carry intentionally-malformed fixtures (to exercise syntax-
+          # error handling) that CodeQL cannot parse, plus harness code that
+          # runs bundles via vm.runInNewContext which trips false-positive
+          # code-injection alerts. Neither is the security target for a library.
+          config: |
+            paths-ignore:
+              - test
+              - tests
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
