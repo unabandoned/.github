@@ -8,8 +8,9 @@ name: release-reusable
 #
 # The version bump is derived from the head commit subject (Conventional
 # Commits): `feat!:` / `BREAKING CHANGE` -> major, `feat:` -> minor, anything
-# else -> patch. A floating major tag (e.g. v1) is moved to each release so a
-# caller may track a major line if it prefers.
+# else -> patch. Running it manually (workflow_dispatch) takes the bump from the
+# `bump` input instead. A floating major tag (e.g. v1) is moved to each release
+# so a caller may track a major line if it prefers.
 #
 # Trigger paths: the reusable-*.yml definitions, plus every non-workflow file a
 # reusable workflow checks out and runs at its pinned version. Today that is
@@ -21,6 +22,13 @@ on:
     paths:
       - '.github/workflows/reusable-*.yml'
       - 'scripts/validate_metadata.py'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump to apply when run manually.'
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 concurrency:
   group: release-reusable
@@ -39,24 +47,39 @@ jobs:
       - name: Compute next version and cut the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          BUMP: ${{ inputs.bump }}
           HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
           latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1 || true)"
           latest="${latest:-v0.0.0}"
           ver="${latest#v}"
           major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"; patch="${rest##*.}"
 
-          subject="$(printf '%s\n' "$HEAD_MSG" | head -n1)"
-          if printf '%s' "$HEAD_MSG" | grep -qE 'BREAKING CHANGE:' \
-             || printf '%s' "$subject" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
-            major=$((major + 1)); minor=0; patch=0
-          elif printf '%s' "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
-            minor=$((minor + 1)); patch=0
+          if [ "${EVENT}" = 'workflow_dispatch' ]; then
+            level="${BUMP:-patch}"
           else
-            patch=$((patch + 1))
+            subject="$(printf '%s\n' "$HEAD_MSG" | head -n1)"
+            if printf '%s' "$HEAD_MSG" | grep -qE 'BREAKING CHANGE:' \
+               || printf '%s' "$subject" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+              level=major
+            elif printf '%s' "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
+              level=minor
+            else
+              level=patch
+            fi
           fi
+
+          case "${level}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            *)     patch=$((patch + 1)) ;;
+          esac
           new="v${major}.${minor}.${patch}"
 
           if git rev-parse -q --verify "refs/tags/${new}" >/dev/null; then
@@ -64,7 +87,7 @@ jobs:
             exit 0
           fi
 
-          echo "Releasing ${new} (previous ${latest}) from ${GITHUB_SHA}"
+          echo "Releasing ${new} (previous ${latest}, bump ${level}) from ${GITHUB_SHA}"
           git tag -a "${new}" -m "${new}"
           git tag -f -a "v${major}" -m "v${major}"
           git push origin "refs/tags/${new}"
