@@ -1,1 +1,9 @@
 node_modules/
+
+# Python bytecode + local venv used by the dashboard scripts
+__pycache__/
+*.pyc
+.venv/
+
+# Local dashboard build output (published to Pages from CI, never committed)
+public/
