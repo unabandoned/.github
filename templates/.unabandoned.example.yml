@@ -1,0 +1,30 @@
+# Worked example — a real, filled-in .unabandoned.yml for the `events` fork.
+#
+# This is what `templates/.unabandoned.yml` looks like once completed. To stand
+# up a fork, copy the *blank* template into the fork repo's root as
+# `.unabandoned.yml` and fill it in like this. This example lives here (not in a
+# fork) only as a reference; the dashboard reads each fork's own root file.
+schema: 1
+
+package: "@unabandoned/events"
+
+upstream:
+  repo: browserify/events
+  reason: "unmaintained upstream — the package sits idle while its dev-dependency tree ages"
+
+summary: >-
+  Node.js's EventEmitter implemented for the browser and other environments that
+  don't ship Node's built-in `events` module.
+
+why-forked: >-
+  A transitive dependency of browserify-style bundling that went unmaintained
+  while its dev tree aged; forked so Renovate keeps that tree current for the
+  consumers that pull it in transitively.
+
+status: active
+
+used-by:
+  - consumer: "browserify-based consumer bundles"
+    purpose: "Pulled in transitively wherever a browser bundle needs Node's EventEmitter."
+
+tags: [browser, events, shim, node-core-polyfill]
