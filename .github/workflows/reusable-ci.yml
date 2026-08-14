@@ -38,7 +38,7 @@ jobs:
   # shared schema, so a fork can't merge broken metadata or silently drift out
   # of the dashboard. Runs once (not per Node version); a no-op for the rare
   # repo that carries no metadata file. The validator is the single source of
-  # truth for the schema — it lives in unabandoned/.github and is checked out
+  # truth for the schema - it lives in unabandoned/.github and is checked out
   # here rather than duplicated inline.
   metadata:
     runs-on: ubuntu-latest
@@ -51,13 +51,19 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: unabandoned/.github
-          ref: main
+          # Pin the validator to THIS reusable workflow's version - the ref the
+          # caller pinned - instead of main, so a fork's pinned reusable-CI
+          # version fully determines its CI behaviour and a validator change
+          # ships via a new reusable-workflow release rather than silently to
+          # every fork. github.job_workflow_sha is the commit SHA of this
+          # reusable workflow file for the current job.
+          ref: ${{ github.job_workflow_sha }}
           path: .unabandoned-ci
           persist-credentials: false
       - name: Validate .unabandoned.yml
         run: |
           if [ ! -f .unabandoned.yml ]; then
-            echo "No .unabandoned.yml in this repo — nothing to validate."
+            echo "No .unabandoned.yml in this repo - nothing to validate."
             exit 0
           fi
           python3 -m venv .venv
