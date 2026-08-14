@@ -51,7 +51,7 @@ jobs:
           .venv/bin/pip install --quiet pyyaml
           .venv/bin/python scripts/build_dashboard.py
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: public
 
