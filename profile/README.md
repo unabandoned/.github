@@ -63,6 +63,15 @@ each fork carries only a thin caller. See
 [`CONTRIBUTING.md`](https://github.com/unabandoned/.github/blob/main/CONTRIBUTING.md) for
 how to add a new fork.
 
+## Package dashboard
+
+Every fork's live status — pending Renovate updates, open PRs and issues, latest release, CI,
+any security fast-path in flight, and what each package is used for — is on the
+**[package dashboard](https://unabandoned.github.io/.github/)**. It's generated from each fork's
+own `.unabandoned.yml` plus the GitHub API and rebuilt on a schedule, so it's never hand-edited
+and can't drift. A machine-readable copy lives at
+[`data.json`](https://unabandoned.github.io/.github/data.json).
+
 ## Reporting a vulnerability
 
 See [`SECURITY.md`](https://github.com/unabandoned/.github/blob/main/SECURITY.md). Reporting

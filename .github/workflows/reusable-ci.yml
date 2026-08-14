@@ -33,3 +33,33 @@ jobs:
       - if: ${{ inputs.has-build }}
         run: npm run build
       - run: npm test
+
+  # Validate the fork's `.unabandoned.yml` (dashboard metadata) against the
+  # shared schema, so a fork can't merge broken metadata or silently drift out
+  # of the dashboard. Runs once (not per Node version); a no-op for the rare
+  # repo that carries no metadata file. The validator is the single source of
+  # truth for the schema — it lives in unabandoned/.github and is checked out
+  # here rather than duplicated inline.
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the metadata validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: unabandoned/.github
+          ref: main
+          path: .unabandoned-ci
+          persist-credentials: false
+      - name: Validate .unabandoned.yml
+        run: |
+          if [ ! -f .unabandoned.yml ]; then
+            echo "No .unabandoned.yml in this repo — nothing to validate."
+            exit 0
+          fi
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pyyaml
+          .venv/bin/python .unabandoned-ci/scripts/validate_metadata.py .unabandoned.yml

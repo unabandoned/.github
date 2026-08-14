@@ -1,0 +1,72 @@
+name: dashboard
+
+# Builds the central @unabandoned package dashboard and publishes it to GitHub
+# Pages (https://unabandoned.github.io/.github/). The page is regenerated on a
+# schedule and on demand, and whenever the builder itself changes, so it stays
+# current without anyone hand-editing it. Everything shown is derived live from
+# the org's forks and the GitHub API; the only hand-authored input is each
+# fork's `.unabandoned.yml`.
+#
+# One-time human setup (like `npm trust` and the Renovate app, this can't be
+# scripted): Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+#
+# The Pages actions below use major-version tags; Renovate pins them to digests
+# on first run (helpers:pinGitHubActionDigestsToSemver in the shared preset).
+on:
+  schedule:
+    - cron: '0 6 * * *'      # daily at 06:00 UTC, matching the org's release cadence
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build_dashboard.py'
+      - 'scripts/validate_metadata.py'
+      - 'scripts/dashboard_template.html'
+      - '.github/workflows/dashboard.yml'
+
+# Never run two Pages deployments at once, but let a build finish rather than
+# cancelling a deploy midway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build dashboard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DASHBOARD_ORG: ${{ github.repository_owner }}
+          DASHBOARD_OUT: public
+        run: |
+          # Isolated venv keeps PyYAML off the system Python (PEP 668-safe).
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pyyaml
+          .venv/bin/python scripts/build_dashboard.py
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write            # to deploy to Pages
+      id-token: write         # to verify the deployment originates from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

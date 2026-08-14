@@ -176,3 +176,10 @@ jobs:
 - **`commitlint.config.js`** — `module.exports = { extends: ['@commitlint/config-conventional'] };`
 - **`.githooks/commit-msg`** — `npx --no-install commitlint --edit "$1"`, wired via a
   `"prepare": "git config core.hooksPath .githooks || true"` script.
+- **`.unabandoned.yml`** — copy [`.unabandoned.yml`](./.unabandoned.yml) and fill in the
+  editorial facts (upstream source, summary, why-forked, and optionally where it's used). This
+  is the fork's single source of truth for the [central dashboard](https://unabandoned.github.io/.github/);
+  `reusable-ci` validates it on every PR, and the dashboard reads it live from the default
+  branch, so it never has to be re-typed into a central registry. Everything else the dashboard
+  shows (open PRs/issues, pending Renovate updates, releases, CI, security fast-path) is derived
+  live from GitHub — don't record any of that here.

@@ -64,7 +64,13 @@ New forks follow the shared template so they inherit the whole pipeline:
    "forkProcessing": "enabled" }`.
 5. **Add release-please files**: copy `templates/release-please-config.json` and set a
    `.release-please-manifest.json` with the package's current version.
-6. A human then enables the **Renovate GitHub App** and runs **`npm trust`** to configure the
+6. **Add `.unabandoned.yml`**: copy [`templates/.unabandoned.yml`](./templates/.unabandoned.yml)
+   and fill in the editorial facts (upstream source, what the package does, why we forked it,
+   and — optionally — where it's used). This is the fork's entry on the
+   [central dashboard](https://unabandoned.github.io/.github/); CI validates it, and the
+   dashboard reads it straight from the default branch, so keep it up to date **in the same PR**
+   that changes what it describes.
+7. A human then enables the **Renovate GitHub App** and runs **`npm trust`** to configure the
    trusted publisher (both are 2FA-gated and can't be automated).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full program model.

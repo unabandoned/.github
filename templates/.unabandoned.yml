@@ -1,0 +1,63 @@
+# .unabandoned.yml — dashboard metadata for an @unabandoned/* fork.
+#
+# This file is the SINGLE SOURCE OF TRUTH for the editorial facts about this
+# fork (what it is, why we adopted it, where it's used). The central dashboard
+# (https://unabandoned.github.io/.github/) reads it straight from the fork's
+# default branch, so nothing has to be re-typed into a separate registry that
+# would drift the moment the fork changes.
+#
+# The dashboard derives everything ELSE — open PRs/issues, pending Renovate
+# updates, latest release, CI status, security fast-path — live from the GitHub
+# API. Do not record any of that here; it would only go stale.
+#
+# Rule of thumb: if a field could be answered by looking at GitHub right now,
+# it does NOT belong in this file. Only human-authored context does.
+#
+# Update this file in the SAME pull request that changes what it describes, so
+# the docs can't drift from the code. `.unabandoned.yml` is schema-validated in
+# CI (reusable-ci runs scripts/validate_metadata.py from unabandoned/.github),
+# so a missing required field or wrong type fails the build rather than silently
+# dropping the fork from the dashboard.
+
+# Schema version. Bump only when the shape below changes incompatibly.
+schema: 1
+
+# REQUIRED — the published npm package name, including the @unabandoned scope.
+package: "@unabandoned/example"
+
+# REQUIRED — the upstream project we forked.
+upstream:
+  # "owner/name" of the original GitHub repository.
+  repo: upstream-owner/example
+  # One short phrase on why it counts as abandoned (drives the "why we're here"
+  # column). Keep it factual: "no release since 2019", "archived by author", etc.
+  reason: "no releases since 2019; issues unanswered"
+
+# REQUIRED — one line on what the package actually does, for a reader who has
+# never heard of it. Plain language, no marketing.
+summary: >-
+  One-sentence description of what this package does.
+
+# REQUIRED — why WE carry a fork of it, in program terms (abandoned + outdated
+# tree). This is the rationale the dashboard shows next to the package.
+why-forked: >-
+  Abandoned upstream while carrying outdated transitive dependencies; forked so
+  Renovate keeps the tree current for the consumers that pull it in transitively.
+
+# OPTIONAL — lifecycle state. One of:
+#   active            — maintained fork, business as usual (default if omitted)
+#   seeking-replacement — we'd rather migrate consumers to a maintained equivalent
+#   deprecated        — kept only for existing consumers; no new adoption
+status: active
+
+# OPTIONAL — where this fork is used and what for. This is the "full
+# documentation" half of the dashboard: the human context GitHub can't derive.
+# Omit or leave empty if not tracked yet. Each entry:
+#   consumer — the project/package that depends on it (name or owner/repo)
+#   purpose  — what it's used for there, in one line
+used-by:
+  - consumer: some-consumer
+    purpose: What this fork is used for in that consumer.
+
+# OPTIONAL — free-form tags for grouping/filtering on the dashboard.
+tags: []

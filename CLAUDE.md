@@ -69,6 +69,33 @@ Never echo, log, or commit these values.
 2. **`npm trust`** to configure each package's trusted publisher (npm ≥ 11.5.1, Node ≥ 22.14,
    interactive 2FA).
 
+(A third one-time human setting, not 2FA-gated but a repo toggle: in `unabandoned/.github`,
+**Settings → Pages → Source: GitHub Actions**, so the `dashboard` workflow can publish. See
+the dashboard section below.)
+
+## Central dashboard
+
+The org's status/documentation surface is the **package dashboard** at
+`https://unabandoned.github.io/.github/`, built by **`scripts/build_dashboard.py`** and
+published to GitHub Pages by the **`dashboard` workflow** (scheduled daily + `workflow_dispatch`
++ on any change to the builder). It is **never hand-edited** — that is the whole point.
+
+The design splits data into two classes so it can't go stale:
+
+- **Derivable** (open PRs/issues, pending Renovate updates, latest release, CI status, the
+  `security` fast-path, `autorelease: pending`) is pulled **live from the GitHub API** at build
+  time. Never record any of it in a file.
+- **Editorial** (what the package is, why we forked it, upstream source, where it's used) lives
+  in each fork's own **`.unabandoned.yml`** — the single source of truth, co-located with the
+  code so it's updated in the same PR. The dashboard reads it straight from the fork's default
+  branch; there is **no** central registry to drift.
+
+The `.unabandoned.yml` schema is defined once in **`scripts/validate_metadata.py`** (imported by
+the builder and run by `reusable-ci` on every fork PR). The template is
+`templates/.unabandoned.yml`. When adding a fork, add its `.unabandoned.yml`; when changing what
+a fork does or where it's used, update that file in the same PR. Do not add editorial fields that
+GitHub can already answer — if the API knows it, it doesn't belong in the file.
+
 ## Fix forward — don't pin
 
 When a major dependency bump breaks a fork, **adopt the new major and fix the few real
@@ -115,3 +142,7 @@ because the fork-skip decision ignores the preset-inherited value.
   abandoned repos whose tree is already fully current.
 - Never hardcode or echo `PAT` / `NPM_SECRET`.
 - Fix forward, don't pin.
+- The **dashboard is generated, never hand-edited**. Editorial facts live in each fork's
+  `.unabandoned.yml` (single source of truth, updated in the same PR as the code); everything
+  else is derived live from GitHub. Don't record derivable state in files, and don't build a
+  central registry the forks would have to keep in sync.
