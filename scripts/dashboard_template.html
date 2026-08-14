@@ -119,6 +119,7 @@
   footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-muted);
            font-size: 12.5px; color: var(--fg-muted); }
   .noscript-note { display: none; }
+{{TOPOLOGY_CSS}}
 </style>
 </head>
 <body>
@@ -135,6 +136,8 @@
   <section class="stats" aria-label="Summary">
     {{STATS}}
   </section>
+
+  {{TOPOLOGY}}
 
   <div class="toolbar" role="search">
     <input type="search" id="q" placeholder="Filter packages…" aria-label="Filter packages by name or text">

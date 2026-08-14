@@ -96,6 +96,13 @@ the builder and run by `reusable-ci` on every fork PR). The template is
 a fork does or where it's used, update that file in the same PR. Do not add editorial fields that
 GitHub can already answer — if the API knows it, it doesn't belong in the file.
 
+The dashboard also renders a **dependency topology** (`scripts/topology.py`) — a panel on the main
+page plus a standalone `topology.html` — showing consumers, the forks we own, and the shared
+leaves beneath them, coloured by live health. It is a dependency-free **computed SVG** (layered
+layout, no JS/library). Its edges are **derived, never hand-drawn**: `fork → fork` from each
+fork's `package.json` dependencies filtered to the `@unabandoned/*` scope, and `consumer → fork`
+from `used-by`. So the graph stays correct on its own as forks and their trees change.
+
 ## Fix forward — don't pin
 
 When a major dependency bump breaks a fork, **adopt the new major and fix the few real

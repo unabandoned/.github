@@ -34,6 +34,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import topology
 from validate_metadata import load as load_yaml
 from validate_metadata import validate as validate_metadata
 
@@ -164,8 +165,20 @@ def gather(repo_obj: dict, metadata: dict) -> dict:
     # Latest release.
     release = gh_api(f"/repos/{ORG}/{repo}/releases/latest", allow_404=True)
 
+    # package.json runtime dependencies — drives the fork->fork topology edges.
+    dep_packages: list[str] = []
+    pj = gh_api(f"/repos/{ORG}/{repo}/contents/package.json", allow_404=True)
+    if pj and "content" in pj:
+        try:
+            pkg_json = json.loads(base64.b64decode(pj["content"]).decode("utf-8"))
+            dep_packages = sorted((pkg_json.get("dependencies") or {}).keys())
+        except Exception:
+            pass  # a fork without a parseable package.json just has no edges
+
     return {
         "repo": repo,
+        "package": metadata.get("package", repo),
+        "dep_packages": dep_packages,
         "html_url": repo_obj.get("html_url", f"https://github.com/{ORG}/{repo}"),
         "default_branch": default_branch,
         "pushed_at": repo_obj.get("pushed_at"),
@@ -325,6 +338,56 @@ def render_card(f: dict) -> str:
     </article>"""
 
 
+def node_state(f: dict) -> str:
+    """Collapse a fork's health into one topology node state (precedence: risk first)."""
+    if f["security_count"] or f["ci"] == "failing":
+        return "attention"
+    if f["metadata"].get("status") in ("seeking-replacement", "deprecated"):
+        return "seeking-replacement"
+    if f["autorelease_pending"] or f["ci"] == "pending":
+        return "pending"
+    if f["ci"] == "passing":
+        return "passing"
+    return "unknown"
+
+
+def _short(pkg: str) -> str:
+    return pkg.split("/", 1)[1] if "/" in pkg else pkg
+
+
+def build_graph(forks: list[dict]):
+    """Derive topology nodes + edges from package.json deps and used-by. Nothing hand-drawn."""
+    by_pkg = {f["package"]: f for f in forks}
+    nodes: dict = {}
+    edges: list[tuple[str, str]] = []
+
+    for f in forks:
+        nodes[f["package"]] = {
+            "label": _short(f["package"]), "kind": "fork", "state": node_state(f)
+        }
+
+    for f in forks:
+        pkg = f["package"]
+        # fork -> fork: this fork depends on another @unabandoned fork (runtime tree).
+        for dep in f.get("dep_packages", []):
+            if dep in by_pkg and dep != pkg:
+                edges.append((pkg, dep))
+        # consumer -> fork: from used-by. A consumer that is itself a fork becomes a
+        # fork->fork edge; anything else is an external consumer node.
+        for u in (f["metadata"].get("used-by") or []):
+            cons = (u.get("consumer") or "").strip()
+            if not cons:
+                continue
+            if cons in by_pkg:
+                edges.append((cons, pkg))
+            else:
+                cid = "consumer:" + cons
+                nodes.setdefault(cid, {"label": cons, "kind": "consumer", "state": None})
+                edges.append((cid, pkg))
+
+    return nodes, list(dict.fromkeys(edges))  # de-dup, preserve order
+
+
 def render_stats(forks: list[dict]) -> str:
     total = len(forks)
     open_prs = sum(f["open_pr_count"] for f in forks)
@@ -345,7 +408,7 @@ def render_stats(forks: list[dict]) -> str:
     ])
 
 
-def render(forks: list[dict], generated_at: str) -> str:
+def render(forks: list[dict], generated_at: str, topology_html: str) -> str:
     template = TEMPLATE.read_text(encoding="utf-8")
     if forks:
         cards = "\n".join(render_card(f) for f in forks)
@@ -358,10 +421,19 @@ def render(forks: list[dict], generated_at: str) -> str:
         )
     return (
         template
+        .replace("{{TOPOLOGY_CSS}}", topology.TOPOLOGY_CSS)
         .replace("{{GENERATED_AT}}", e(generated_at))
         .replace("{{STATS}}", render_stats(forks))
+        .replace("{{TOPOLOGY}}", topology_html)
         .replace("{{CARDS}}", cards)
     )
+
+
+def _palette_css() -> str:
+    """Lift the dashboard's :root/dark palette from the template for the standalone page."""
+    tpl = TEMPLATE.read_text(encoding="utf-8")
+    style = tpl[tpl.index("<style>") + len("<style>"): tpl.index("</style>")]
+    return style.replace("{{TOPOLOGY_CSS}}", "")
 
 
 def main() -> int:
@@ -369,17 +441,37 @@ def main() -> int:
         "%Y-%m-%d %H:%M UTC"
     )
     forks = discover()
+    nodes, edges = build_graph(forks)
+    svg = topology.render_topology_svg(nodes, edges)
+    panel = topology.topology_panel(svg, standalone_href="./topology.html")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "index.html").write_text(render(forks, generated_at), encoding="utf-8")
+    (OUT_DIR / "index.html").write_text(
+        render(forks, generated_at, panel), encoding="utf-8"
+    )
+    (OUT_DIR / "topology.html").write_text(
+        topology.topology_page(svg, _palette_css()), encoding="utf-8"
+    )
     (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
     (OUT_DIR / "data.json").write_text(
         json.dumps(
-            {"org": ORG, "generated_at": generated_at, "packages": forks},
+            {
+                "org": ORG,
+                "generated_at": generated_at,
+                "packages": forks,
+                "topology": {
+                    "nodes": [{"id": k, **v} for k, v in nodes.items()],
+                    "edges": [{"from": s, "to": d} for s, d in edges],
+                },
+            },
             indent=2,
         ),
         encoding="utf-8",
     )
-    print(f"Built dashboard for {len(forks)} package(s) into {OUT_DIR}/")
+    print(
+        f"Built dashboard for {len(forks)} package(s), "
+        f"{len(nodes)} topology node(s)/{len(edges)} edge(s) into {OUT_DIR}/"
+    )
     return 0
 
 

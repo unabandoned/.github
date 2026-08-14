@@ -69,7 +69,10 @@ Every fork's live status — pending Renovate updates, open PRs and issues, late
 any security fast-path in flight, and what each package is used for — is on the
 **[package dashboard](https://unabandoned.github.io/.github/)**. It's generated from each fork's
 own `.unabandoned.yml` plus the GitHub API and rebuilt on a schedule, so it's never hand-edited
-and can't drift. A machine-readable copy lives at
+and can't drift. A **[dependency topology](https://unabandoned.github.io/.github/topology.html)**
+view maps the owned subtree — consumers, forks, and the shared leaves beneath them — coloured by
+live health, with every edge derived from `package.json` and `used-by` (nothing hand-drawn). A
+machine-readable copy of both lives at
 [`data.json`](https://unabandoned.github.io/.github/data.json).
 
 ## Reporting a vulnerability

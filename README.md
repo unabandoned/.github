@@ -14,9 +14,11 @@ doesn't define its own.
 - **`templates/`** — copy-paste thin callers, the canonical `release-please-config.json`, and
   the `.unabandoned.yml` metadata template for standing up a new fork.
 - **`scripts/`** — the central [package dashboard](https://unabandoned.github.io/.github/)
-  builder (`build_dashboard.py` + `dashboard_template.html`) and the `.unabandoned.yml`
-  schema validator (`validate_metadata.py`, also run by `reusable-ci`). The `dashboard`
-  workflow rebuilds and publishes the site to GitHub Pages on a schedule and on demand.
+  builder (`build_dashboard.py` + `dashboard_template.html`), the
+  [dependency-topology](https://unabandoned.github.io/.github/topology.html) renderer
+  (`topology.py`, a dependency-free computed SVG), and the `.unabandoned.yml` schema validator
+  (`validate_metadata.py`, also run by `reusable-ci`). The `dashboard` workflow rebuilds and
+  publishes the site to GitHub Pages on a schedule and on demand.
 - **`CLAUDE.md`** — program guidance for Claude Code in any of these repos.
 - **Community-health files** — `SECURITY.md`, `CONTRIBUTING.md`, `SUPPORT.md`, `CODEOWNERS`,
   issue/PR templates, `FUNDING.yml`, inherited org-wide.
