@@ -34,6 +34,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dep_audit
 import topology
 from validate_metadata import load as load_yaml
 from validate_metadata import validate as validate_metadata
@@ -408,7 +409,8 @@ def render_stats(forks: list[dict]) -> str:
     ])
 
 
-def render(forks: list[dict], generated_at: str, topology_html: str) -> str:
+def render(forks: list[dict], generated_at: str, topology_html: str,
+           audit_html: str) -> str:
     template = TEMPLATE.read_text(encoding="utf-8")
     if forks:
         cards = "\n".join(render_card(f) for f in forks)
@@ -421,10 +423,10 @@ def render(forks: list[dict], generated_at: str, topology_html: str) -> str:
         )
     return (
         template
-        .replace("{{TOPOLOGY_CSS}}", topology.TOPOLOGY_CSS)
+        .replace("{{TOPOLOGY_CSS}}", topology.TOPOLOGY_CSS + dep_audit.AUDIT_CSS)
         .replace("{{GENERATED_AT}}", e(generated_at))
         .replace("{{STATS}}", render_stats(forks))
-        .replace("{{TOPOLOGY}}", topology_html)
+        .replace("{{TOPOLOGY}}", topology_html + audit_html)
         .replace("{{CARDS}}", cards)
     )
 
@@ -445,12 +447,21 @@ def main() -> int:
     svg = topology.render_topology_svg(nodes, edges)
     panel = topology.topology_panel(svg, standalone_href="./topology.html")
 
+    # Resolve what actually ships beneath each fork. Renovate's dashboards only
+    # see direct dependencies, so this is the org's only view of the transitive
+    # tree; it degrades to an omitted section if npm is unavailable.
+    report = dep_audit.audit([f["package"] for f in forks])
+    audit_panel = dep_audit.audit_panel(report, standalone_href="./dependencies.html")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "index.html").write_text(
-        render(forks, generated_at, panel), encoding="utf-8"
+        render(forks, generated_at, panel, audit_panel), encoding="utf-8"
     )
     (OUT_DIR / "topology.html").write_text(
         topology.topology_page(svg, _palette_css()), encoding="utf-8"
+    )
+    (OUT_DIR / "dependencies.html").write_text(
+        dep_audit.audit_page(report, _palette_css()), encoding="utf-8"
     )
     (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
     (OUT_DIR / "data.json").write_text(
@@ -463,15 +474,26 @@ def main() -> int:
                     "nodes": [{"id": k, **v} for k, v in nodes.items()],
                     "edges": [{"from": s, "to": d} for s, d in edges],
                 },
+                "dependency_audit": report,
             },
             indent=2,
         ),
         encoding="utf-8",
     )
+    totals = report.get("totals") or {}
     print(
         f"Built dashboard for {len(forks)} package(s), "
         f"{len(nodes)} topology node(s)/{len(edges)} edge(s) into {OUT_DIR}/"
     )
+    if report.get("available"):
+        print(
+            f"  audit: {totals.get('unique', 0)} unique package(s) — "
+            f"{totals.get('bomb', 0)} time bomb(s) ({totals.get('invisible', 0)} "
+            f"invisible), {totals.get('inert', 0)} inert, {totals.get('alive', 0)} alive; "
+            f"{totals.get('self_hosted', 0)} already-forked package(s) pulled from upstream"
+        )
+    else:
+        sys.stderr.write("warning: dependency audit skipped — npm not on PATH\n")
     return 0
 
 

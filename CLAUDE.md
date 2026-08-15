@@ -103,6 +103,27 @@ layout, no JS/library). Its edges are **derived, never hand-drawn**: `fork → f
 fork's `package.json` dependencies filtered to the `@unabandoned/*` scope, and `consumer → fork`
 from `used-by`. So the graph stays correct on its own as forks and their trees change.
 
+Alongside it is the **transitive dependency audit** (`scripts/dep_audit.py`) — a panel plus a
+standalone `dependencies.html`. Renovate's per-fork dashboards can only flag what appears in a
+`package.json`, so an abandoned package reachable only transitively is invisible to every
+dashboard in the org; this closes that gap by resolving each fork's full production tree with
+`npm install --package-lock-only --omit=dev --ignore-scripts` (registry metadata only — no
+tarball is downloaded and no lifecycle script runs) and classifying every node:
+
+- **alive** — released within `abandonmentThreshold`; a maintainer can still respond.
+- **inert** — abandoned but **zero runtime deps**. Nothing beneath it to rot; this is exactly the
+  class the shared Renovate preset is entitled to suppress.
+- **time bomb** — abandoned **and** carrying its own runtime deps, so its subtree ages with nobody
+  left to bump it. The only actionable class: own it (fork/vendor/replace), never silence it.
+
+"On latest" is not a health signal — a frozen package pinned to frozen dependencies is still
+rotting. That is why the classification turns on whether a package *can* rot, not on whether it
+is currently behind. The audit also cross-checks each tree against the packages we already
+maintain and reports any fork still resolving a sibling from its **abandoned upstream** instead of
+the `@unabandoned` scope — self-inflicted rot, and the cheapest thing to fix. All of it is derived
+at build time; none of it is recorded in a file. A fork that fails to resolve (e.g. not yet
+published) degrades to one "unresolved" row rather than failing the build.
+
 ## Fix forward — don't pin
 
 When a major dependency bump breaks a fork, **adopt the new major and fix the few real
