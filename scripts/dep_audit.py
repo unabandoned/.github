@@ -294,11 +294,14 @@ def audit(packages: list[str]) -> dict:
             if name in owned and state != "alive":
                 sh = self_hosted.setdefault(name, {
                     "upstream": name, "state": state, "last": last,
-                    "pulled_by": [], "parents": [],
+                    "pulled_by": [], "routes": [],
                 })
                 sh["pulled_by"].append(package)
-                if node.get("parent") and node["parent"] not in sh["parents"]:
-                    sh["parents"].append(node["parent"])
+                # One route per consuming fork. A flat "declared by" list crossed
+                # with a flat "reaches" list cannot say which fork arrives through
+                # which intermediary, which is the only thing that makes a row
+                # actionable — so keep the pairing intact.
+                sh["routes"].append({"fork": package, "via": node.get("via") or []})
                 if _SEVERITY[state] > _SEVERITY[sh["state"]]:
                     sh.update(state=state, last=last)
 
@@ -314,7 +317,7 @@ def audit(packages: list[str]) -> dict:
         slot["parents"].sort()
     for sh in self_hosted.values():
         sh["pulled_by"].sort()
-        sh["parents"].sort()
+        sh["routes"].sort(key=lambda r: r["fork"])
 
     bombs = [u for u in unique.values() if u["state"] == "bomb"]
     totals = {
@@ -395,6 +398,7 @@ AUDIT_CSS = """
 .audit-trail .audit-root { color: var(--accent); font-weight: 650; }
 .audit-trail .audit-leaf { color: var(--bad); font-weight: 650; }
 .audit-trail i { color: var(--fg-muted); font-style: normal; opacity: .65; }
+.audit-routes { display: flex; flex-direction: column; gap: 4px; }
 .audit-dim { color: var(--fg-muted); }
 .audit-h3 { font: 650 13.5px -apple-system, system-ui, sans-serif; margin: 18px 0 8px;
   letter-spacing: -.005em; }
@@ -494,18 +498,25 @@ def _self_hosted_table(rows: list[dict]) -> str:
     if not rows:
         return ('<p class="audit-empty">None — every fork resolves its siblings from the '
                 "<code>@unabandoned</code> scope.</p>")
+    def routes_cell(r: dict) -> str:
+        routes = r.get("routes") or []
+        if not routes:
+            return '<span class="audit-dim">—</span>'
+        return '<div class="audit-routes">' + "".join(
+            _trail(rt["fork"], rt["via"], r["upstream"]) for rt in routes
+        ) + "</div>"
+
     body = "".join(
         f'<tr><td class="name">{e(r["upstream"])}</td>'
         f'<td>{_chip(r["state"])}</td>'
         f'<td class="name">{e(r["last"] or "unknown")}</td>'
-        f'<td class="wrap">{e(", ".join(r.get("parents") or [])) or "—"}</td>'
-        f'<td class="wrap">{e(", ".join(r["pulled_by"]))}</td></tr>'
+        f'<td class="trail">{routes_cell(r)}</td></tr>'
         for r in rows
     )
     return (
         '<div class="audit-scroll"><table class="audit-table"><thead><tr>'
         "<th>Upstream package</th><th>State</th><th>Last release</th>"
-        "<th>Declared by</th><th>Reaches</th></tr></thead><tbody>"
+        "<th>How each fork gets it</th></tr></thead><tbody>"
         + body + "</tbody></table></div>"
     )
 
