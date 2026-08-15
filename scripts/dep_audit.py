@@ -96,6 +96,47 @@ def npm_available() -> bool:
     return shutil.which("npm") is not None
 
 
+def _lookup(entries: dict, from_key: str, dep: str) -> str | None:
+    """Which lockfile entry satisfies `dep` when required from `from_key`.
+
+    Mirrors node's resolution: try `<dir>/node_modules/<dep>`, then walk up one
+    enclosing package at a time. Hoisted trees resolve on the last hop; nested
+    copies (a version conflict) resolve on an earlier one, which is exactly the
+    distinction that makes a path correct rather than merely plausible.
+    """
+    prefix = from_key
+    while True:
+        candidate = (prefix + "/node_modules/" + dep).lstrip("/")
+        if candidate in entries:
+            return candidate
+        if not prefix:
+            return None
+        cut = prefix.rfind("/node_modules/")
+        prefix = prefix[:cut] if cut != -1 else ""
+
+
+def _shortest_paths(entries: dict, root_key: str, real_name) -> dict[str, list[str]]:
+    """BFS from the fork, returning {entry key: [real names, root first]}.
+
+    Shortest wins because it is the most direct explanation of why a package is
+    in the tree; a package pulled by several parents gets the tightest one.
+    """
+    start = root_key if root_key in entries else ""
+    paths = {start: [real_name(start)] if start else []}
+    queue = [start]
+    while queue:
+        nxt: list[str] = []
+        for key in queue:
+            for dep in ((entries.get(key) or {}).get("dependencies") or {}):
+                child = _lookup(entries, key, dep)
+                if child is None or child in paths:
+                    continue
+                paths[child] = paths[key] + [real_name(child)]
+                nxt.append(child)
+        queue = nxt
+    return paths
+
+
 def resolve_tree(package: str) -> tuple[dict, str | None]:
     """Resolve `package`'s production tree.
 
@@ -126,19 +167,30 @@ def resolve_tree(package: str) -> tuple[dict, str | None]:
         root_key = "node_modules/" + package
         direct = set((entries.get(root_key) or {}).get("dependencies") or {})
 
-        tree: dict[str, dict] = {}
-        for key, meta in entries.items():
-            if not key.startswith("node_modules/"):
-                continue
+        def real_name(key: str) -> str:
             # npm's alias syntax — "buffer": "npm:@unabandoned/buffer@^6" — installs
             # one package under another's directory name. The lockfile key is only
             # WHERE it was placed; `name` is WHAT it actually is. Identifying by the
             # key would read a fork as its abandoned upstream and date it from the
             # wrong packument, so the real name always wins.
+            meta = entries.get(key) or {}
+            return meta.get("name") or key.split("node_modules/")[-1]
+
+        # Shortest path from the fork down to each package, so the audit can say
+        # HOW something arrives and not merely THAT it is present. Node resolution
+        # walks up the directory chain, so a dependency reference is satisfied by
+        # the nearest enclosing node_modules — same rule `require` uses.
+        paths = _shortest_paths(entries, root_key, real_name)
+
+        tree: dict[str, dict] = {}
+        for key, meta in entries.items():
+            if not key.startswith("node_modules/"):
+                continue
             alias = key.split("node_modules/")[-1]
-            name = meta.get("name") or alias
+            name = real_name(key)
             if name == package or meta.get("dev") or meta.get("optional"):
                 continue
+            chain = paths.get(key)
             tree[name] = {
                 "version": meta.get("version"),
                 "ndeps": len(meta.get("dependencies") or {}),
@@ -146,6 +198,10 @@ def resolve_tree(package: str) -> tuple[dict, str | None]:
                 # question about the alias, not the resolved name.
                 "direct": alias in direct,
                 "alias": alias if alias != name else None,
+                # Everything between the fork and this package, exclusive of both.
+                "via": chain[1:-1] if chain and len(chain) > 2 else [],
+                "parent": chain[-2] if chain and len(chain) > 1 else None,
+                "depth": (len(chain) - 1) if chain else None,
             }
         return tree, None
     except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as exc:
@@ -209,9 +265,20 @@ def audit(packages: list[str]) -> dict:
                 "name": name, "version": node["version"], "last": last,
                 "ndeps": node["ndeps"], "state": state,
                 "versions": [], "forks": [], "direct_somewhere": False,
+                "parents": [], "trail": None, "trail_fork": None,
             })
             slot["forks"].append(package)
             slot["direct_somewhere"] |= node["direct"]
+            # Who actually declares it, across every fork — the answer to "why is
+            # this here", which tree membership alone cannot give.
+            if node.get("parent") and node["parent"] not in slot["parents"]:
+                slot["parents"].append(node["parent"])
+            # Keep the shortest trail seen anywhere as the worked example.
+            if node.get("depth") is not None and (
+                slot["trail"] is None or node["depth"] < len(slot["trail"]) + 1
+            ):
+                slot["trail"] = node.get("via") or []
+                slot["trail_fork"] = package
             if node["version"] not in slot["versions"]:
                 slot["versions"].append(node["version"])
             # Different forks can resolve different majors of the same name, and
@@ -226,9 +293,12 @@ def audit(packages: list[str]) -> dict:
             # Self-inflicted: the abandoned upstream of a package we already own.
             if name in owned and state != "alive":
                 sh = self_hosted.setdefault(name, {
-                    "upstream": name, "state": state, "last": last, "pulled_by": [],
+                    "upstream": name, "state": state, "last": last,
+                    "pulled_by": [], "parents": [],
                 })
                 sh["pulled_by"].append(package)
+                if node.get("parent") and node["parent"] not in sh["parents"]:
+                    sh["parents"].append(node["parent"])
                 if _SEVERITY[state] > _SEVERITY[sh["state"]]:
                     sh.update(state=state, last=last)
 
@@ -241,8 +311,10 @@ def audit(packages: list[str]) -> dict:
     for slot in unique.values():
         slot["forks"].sort()
         slot["versions"].sort()
+        slot["parents"].sort()
     for sh in self_hosted.values():
         sh["pulled_by"].sort()
+        sh["parents"].sort()
 
     bombs = [u for u in unique.values() if u["state"] == "bomb"]
     totals = {
@@ -315,6 +387,15 @@ AUDIT_CSS = """
 .audit-chip.c-alive { background: var(--ok-bg); color: var(--ok); }
 .audit-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
   font-size: 12px; color: var(--fg-muted); }
+.audit-table td.trail { white-space: normal; min-width: 280px; }
+.audit-trail { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.audit-trail span { background: var(--chip-bg); border-radius: 4px; padding: 1px 5px;
+  color: var(--fg-muted); }
+.audit-trail .audit-root { color: var(--accent); font-weight: 650; }
+.audit-trail .audit-leaf { color: var(--bad); font-weight: 650; }
+.audit-trail i { color: var(--fg-muted); font-style: normal; opacity: .65; }
+.audit-dim { color: var(--fg-muted); }
 .audit-h3 { font: 650 13.5px -apple-system, system-ui, sans-serif; margin: 18px 0 8px;
   letter-spacing: -.005em; }
 .audit-empty { font-size: 13px; color: var(--fg-muted); }
@@ -336,6 +417,20 @@ LEGEND = (
 def _chip(state: str) -> str:
     label = {"bomb": "time bomb", "inert": "inert", "alive": "alive"}[state]
     return f'<span class="audit-chip c-{e(state)}">{e(label)}</span>'
+
+
+def _trail(fork: str | None, via: list[str] | None, leaf: str) -> str:
+    """The consumption path, fork first: browserify -> browserify-sign -> readable-stream.
+
+    A package deep in a tree is not actionable until you can see which link put
+    it there, so the chain is rendered in full rather than summarised.
+    """
+    if not fork:
+        return '<span class="audit-dim">—</span>'
+    hops = [f'<span class="audit-root">{e(fork)}</span>']
+    hops += [f"<span>{e(v)}</span>" for v in (via or [])]
+    hops.append(f'<span class="audit-leaf">{e(leaf)}</span>')
+    return '<span class="audit-trail">' + '<i>→</i>'.join(hops) + "</span>"
 
 
 def _tiles(t: dict) -> str:
@@ -403,13 +498,15 @@ def _self_hosted_table(rows: list[dict]) -> str:
         f'<tr><td class="name">{e(r["upstream"])}</td>'
         f'<td>{_chip(r["state"])}</td>'
         f'<td class="name">{e(r["last"] or "unknown")}</td>'
+        f'<td class="wrap">{e(", ".join(r.get("parents") or [])) or "—"}</td>'
         f'<td class="wrap">{e(", ".join(r["pulled_by"]))}</td></tr>'
         for r in rows
     )
     return (
         '<div class="audit-scroll"><table class="audit-table"><thead><tr>'
         "<th>Upstream package</th><th>State</th><th>Last release</th>"
-        "<th>Pulled by</th></tr></thead><tbody>" + body + "</tbody></table></div>"
+        "<th>Declared by</th><th>Reaches</th></tr></thead><tbody>"
+        + body + "</tbody></table></div>"
     )
 
 
@@ -424,13 +521,13 @@ def _bomb_table(unique: list[dict], owned: set[str], limit: int | None = None) -
         f'<td class="num">{len(u["forks"])}</td>'
         f'<td class="num">{u["ndeps"]}</td>'
         f'<td class="name">{e(u["last"] or "unknown")}</td>'
-        f'<td class="wrap">{"direct somewhere" if u["direct_somewhere"] else "invisible"}</td></tr>'
+        f'<td class="trail">{_trail(u.get("trail_fork"), u.get("trail"), u["name"])}</td></tr>'
         for u in rows
     )
     return (
         '<div class="audit-scroll"><table class="audit-table"><thead><tr>'
         "<th>Package</th><th>Forks</th><th>Own deps</th><th>Last release</th>"
-        "<th>Visibility</th></tr></thead><tbody>" + body + "</tbody></table></div>"
+        "<th>Shortest path in</th></tr></thead><tbody>" + body + "</tbody></table></div>"
     )
 
 
