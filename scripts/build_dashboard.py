@@ -174,10 +174,20 @@ def gather(repo_obj: dict, metadata: dict) -> dict:
     except urllib.error.HTTPError:
         issues_raw = []
     issues = [i for i in issues_raw if "pull_request" not in i]
+    # Renovate's "Dependency Dashboard" is a control surface, not work. It is
+    # always open, exists on every fork, and the card already links to it as its
+    # own fact — counting it as an issue too put a permanent floor of 1 under
+    # every fork and made the org-wide total almost entirely noise. Matched on
+    # the bot author as well as the title, so a human-filed issue that happens
+    # to share the name still counts as real work.
     dep_dashboard = next(
-        (i for i in issues if i.get("title", "").strip().lower() == "dependency dashboard"),
+        (i for i in issues
+         if i.get("title", "").strip().lower() == "dependency dashboard"
+         and (i.get("user") or {}).get("login") in RENOVATE_LOGINS),
         None,
     )
+    if dep_dashboard is not None:
+        issues = [i for i in issues if i is not dep_dashboard]
     security_issues = [i for i in issues if has_label(i, "security")]
 
     # Latest release.
