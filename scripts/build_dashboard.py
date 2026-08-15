@@ -130,6 +130,23 @@ def ci_state(repo: str, ref: str) -> str:
     return "unknown"
 
 
+def resolve_dep_name(name: str, spec) -> str:
+    """The package a dependency entry actually resolves to.
+
+    Forks wire themselves to their siblings with npm's alias syntax —
+    `"buffer": "npm:@unabandoned/buffer@^6"` — which keeps `require('buffer')`
+    working unchanged while pulling our fork. The scope lives in the SPEC, not
+    the key, so reading keys alone makes every fork->fork edge invisible and the
+    topology graph renders as isolated nodes.
+    """
+    spec = str(spec)
+    if not spec.startswith("npm:"):
+        return name
+    target = spec[len("npm:"):]
+    at = target.rfind("@")          # rfind: scoped names carry a leading '@'
+    return target[:at] if at > 0 else target
+
+
 def has_label(item: dict, name: str) -> bool:
     return any(
         (lbl.get("name", "").lower() == name.lower())
@@ -172,7 +189,10 @@ def gather(repo_obj: dict, metadata: dict) -> dict:
     if pj and "content" in pj:
         try:
             pkg_json = json.loads(base64.b64decode(pj["content"]).decode("utf-8"))
-            dep_packages = sorted((pkg_json.get("dependencies") or {}).keys())
+            dep_packages = sorted(
+                {resolve_dep_name(n, s)
+                 for n, s in (pkg_json.get("dependencies") or {}).items()}
+            )
         except Exception:
             pass  # a fork without a parseable package.json just has no edges
 

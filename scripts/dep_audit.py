@@ -130,13 +130,22 @@ def resolve_tree(package: str) -> tuple[dict, str | None]:
         for key, meta in entries.items():
             if not key.startswith("node_modules/"):
                 continue
-            name = key.split("node_modules/")[-1]
+            # npm's alias syntax — "buffer": "npm:@unabandoned/buffer@^6" — installs
+            # one package under another's directory name. The lockfile key is only
+            # WHERE it was placed; `name` is WHAT it actually is. Identifying by the
+            # key would read a fork as its abandoned upstream and date it from the
+            # wrong packument, so the real name always wins.
+            alias = key.split("node_modules/")[-1]
+            name = meta.get("name") or alias
             if name == package or meta.get("dev") or meta.get("optional"):
                 continue
             tree[name] = {
                 "version": meta.get("version"),
                 "ndeps": len(meta.get("dependencies") or {}),
-                "direct": name in direct,
+                # The root's `dependencies` are keyed by alias, so directness is a
+                # question about the alias, not the resolved name.
+                "direct": alias in direct,
+                "alias": alias if alias != name else None,
             }
         return tree, None
     except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as exc:
