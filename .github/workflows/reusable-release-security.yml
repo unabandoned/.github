@@ -21,6 +21,7 @@ jobs:
       github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'security')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Refresh the release PR so it includes the security fix
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
