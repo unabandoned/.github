@@ -17,6 +17,7 @@ permissions:
 jobs:
   cut:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Merge the pending release-please PR
         env:
