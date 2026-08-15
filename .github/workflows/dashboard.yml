@@ -20,6 +20,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/build_dashboard.py'
+      - 'scripts/dep_audit.py'
+      - 'scripts/topology.py'
       - 'scripts/validate_metadata.py'
       - 'scripts/dashboard_template.html'
       - '.github/workflows/dashboard.yml'
@@ -40,6 +42,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The transitive dependency audit shells out to npm to resolve each fork's
+      # production tree. It runs `--package-lock-only --ignore-scripts`, so npm
+      # only reads registry metadata: no tarballs are downloaded and no package
+      # lifecycle script ever executes in this job.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       - name: Build dashboard
         env:
           GITHUB_TOKEN: ${{ github.token }}
