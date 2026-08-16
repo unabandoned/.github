@@ -2,7 +2,7 @@
 #
 # This file is the SINGLE SOURCE OF TRUTH for the editorial facts about this
 # fork (what it is, why we adopted it, where it's used). The central dashboard
-# (https://unabandoned.github.io/.github/) reads it straight from the fork's
+# (https://unabandoned.github.io/recon/) reads it straight from the fork's
 # default branch, so nothing has to be re-typed into a separate registry that
 # would drift the moment the fork changes.
 #

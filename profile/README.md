@@ -67,13 +67,20 @@ how to add a new fork.
 
 Every fork's live status — pending Renovate updates, open PRs and issues, latest release, CI,
 any security fast-path in flight, and what each package is used for — is on the
-**[package dashboard](https://unabandoned.github.io/.github/)**. It's generated from each fork's
+**[package dashboard](https://unabandoned.github.io/recon/)**. It's generated from each fork's
 own `.unabandoned.yml` plus the GitHub API and rebuilt on a schedule, so it's never hand-edited
-and can't drift. A **[dependency topology](https://unabandoned.github.io/.github/topology.html)**
+and can't drift. A **[dependency topology](https://unabandoned.github.io/recon/topology.html)**
 view maps the owned subtree — consumers, forks, and the shared leaves beneath them — coloured by
-live health, with every edge derived from `package.json` and `used-by` (nothing hand-drawn). A
-machine-readable copy of both lives at
-[`data.json`](https://unabandoned.github.io/.github/data.json).
+live health, with every edge derived from `package.json` and `used-by` (nothing hand-drawn).
+
+Beyond status, it answers the questions that actually decide work: a
+**[work queue](https://unabandoned.github.io/recon/queue.html)** ranking interventions by how
+much rot each one removes rather than how often a package appears, and
+**[intake](https://unabandoned.github.io/recon/intake.html)** for auditing a dependency tree —
+or comparing any two repositories — before adopting it. Anything measured but unmeasurable is
+reported as `unknown` rather than assumed healthy, and every build carries its own integrity
+verdict. A machine-readable copy is at
+[`observation.json`](https://unabandoned.github.io/recon/observation.json).
 
 ## Reporting a vulnerability
 

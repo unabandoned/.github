@@ -75,54 +75,50 @@ the dashboard section below.)
 
 ## Central dashboard
 
-The org's status/documentation surface is the **package dashboard** at
-`https://unabandoned.github.io/.github/`, built by **`scripts/build_dashboard.py`** and
-published to GitHub Pages by the **`dashboard` workflow** (scheduled daily + `workflow_dispatch`
-+ on any change to the builder). It is **never hand-edited** — that is the whole point.
+The org's status surface is **[`unabandoned/recon`](https://github.com/unabandoned/recon)**,
+published to `https://unabandoned.github.io/recon/`. It used to be built from
+`scripts/build_dashboard.py` in this repository; that builder has been removed and recon
+replaces it. This repo still owns **`scripts/validate_metadata.py`**, because `reusable-ci`
+bundles it and runs it against every fork's `.unabandoned.yml` on every pull request.
 
-The design splits data into two classes so it can't go stale:
+The design principle recon is built around: **make "we don't know" unrepresentable as a benign
+value.** A failed read is a state that reaches the page as `unknown`, counted in every
+denominator and carrying its reason — never a default that looks healthy. Every headline number
+is cross-checked against an independent derivation or a hand-asserted fact before it renders,
+and a build that fails its own checks publishes anyway, with a red banner, because a visibly
+broken dashboard gets fixed and a silently stale one does not.
+
+The data split that keeps it from going stale is unchanged:
 
 - **Derivable** (open PRs/issues, pending Renovate updates, latest release, CI status, the
   `security` fast-path, `autorelease: pending`) is pulled **live from the GitHub API** at build
   time. Never record any of it in a file.
 - **Editorial** (what the package is, why we forked it, upstream source, where it's used) lives
   in each fork's own **`.unabandoned.yml`** — the single source of truth, co-located with the
-  code so it's updated in the same PR. The dashboard reads it straight from the fork's default
-  branch; there is **no** central registry to drift.
+  code so it's updated in the same PR. There is **no** central registry to drift.
 
-The `.unabandoned.yml` schema is defined once in **`scripts/validate_metadata.py`** (imported by
-the builder and run by `reusable-ci` on every fork PR). The template is
-`templates/.unabandoned.yml`. When adding a fork, add its `.unabandoned.yml`; when changing what
-a fork does or where it's used, update that file in the same PR. Do not add editorial fields that
-GitHub can already answer — if the API knows it, it doesn't belong in the file.
+The one refinement: a fixture that *audits* the derivation is not editorial and does not
+co-locate. Sibling-edge assertions used to live per-fork, which cost 27 pull requests to
+populate, so nobody wrote one and the check that read them passed vacuously for its whole life.
+They live in recon's own `fixtures/org.yml` now — one repository, one pull request.
 
-The dashboard also renders a **dependency topology** (`scripts/topology.py`) — a panel on the main
-page plus a standalone `topology.html` — showing consumers, the forks we own, and the shared
-leaves beneath them, coloured by live health. It is a dependency-free **computed SVG** (layered
-layout, no JS/library). Its edges are **derived, never hand-drawn**: `fork → fork` from each
-fork's `package.json` dependencies filtered to the `@unabandoned/*` scope, and `consumer → fork`
-from `used-by`. So the graph stays correct on its own as forks and their trees change.
+Classification is the same three-way split, and it is about whether a package *can* rot rather
+than whether it is currently behind. "On latest" is not a health signal: a frozen package pinned
+to frozen dependencies is still rotting.
 
-Alongside it is the **transitive dependency audit** (`scripts/dep_audit.py`) — a panel plus a
-standalone `dependencies.html`. Renovate's per-fork dashboards can only flag what appears in a
-`package.json`, so an abandoned package reachable only transitively is invisible to every
-dashboard in the org; this closes that gap by resolving each fork's full production tree with
-`npm install --package-lock-only --omit=dev --ignore-scripts` (registry metadata only — no
-tarball is downloaded and no lifecycle script runs) and classifying every node:
+- **alive** — released within the abandonment threshold; a maintainer can still respond.
+- **inert** — abandoned but **zero runtime deps**. Nothing beneath it to rot; the class the
+  shared Renovate preset is entitled to suppress.
+- **time bomb** — abandoned **and** carrying its own runtime deps. The only actionable class:
+  own it (fork/vendor/replace), never silence it.
+- **unknown** — could not be measured. Not the same as healthy, and counted separately.
 
-- **alive** — released within `abandonmentThreshold`; a maintainer can still respond.
-- **inert** — abandoned but **zero runtime deps**. Nothing beneath it to rot; this is exactly the
-  class the shared Renovate preset is entitled to suppress.
-- **time bomb** — abandoned **and** carrying its own runtime deps, so its subtree ages with nobody
-  left to bump it. The only actionable class: own it (fork/vendor/replace), never silence it.
-
-"On latest" is not a health signal — a frozen package pinned to frozen dependencies is still
-rotting. That is why the classification turns on whether a package *can* rot, not on whether it
-is currently behind. The audit also cross-checks each tree against the packages we already
-maintain and reports any fork still resolving a sibling from its **abandoned upstream** instead of
-the `@unabandoned` scope — self-inflicted rot, and the cheapest thing to fix. All of it is derived
-at build time; none of it is recorded in a file. A fork that fails to resolve (e.g. not yet
-published) degrades to one "unresolved" row rather than failing the build.
+Beyond what the old dashboard did, recon adds history (snapshots on a `data` branch, so "did
+that change help?" is answerable), a **work queue** that ranks interventions by how much rot
+each one removes rather than by how often a package appears, **intake** for auditing a tree
+before adopting it, and a **comparison** of any two repositories' dependencies. Its docs are
+`docs/redesign.md` (the design) and `docs/implementation.md` (what is built, and every bug the
+mechanisms have caught).
 
 ## Fix forward — don't pin
 
