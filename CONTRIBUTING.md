@@ -67,7 +67,7 @@ New forks follow the shared template so they inherit the whole pipeline:
 6. **Add `.unabandoned.yml`**: copy [`templates/.unabandoned.yml`](./templates/.unabandoned.yml)
    and fill in the editorial facts (upstream source, what the package does, why we forked it,
    and — optionally — where it's used). This is the fork's entry on the
-   [central dashboard](https://unabandoned.github.io/.github/); CI validates it, and the
+   [central dashboard](https://unabandoned.github.io/recon/); CI validates it, and the
    dashboard reads it straight from the default branch, so keep it up to date **in the same PR**
    that changes what it describes.
 7. A human then enables the **Renovate GitHub App** and runs **`npm trust`** to configure the
