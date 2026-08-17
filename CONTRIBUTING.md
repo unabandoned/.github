@@ -9,7 +9,7 @@ Thanks for helping keep these trees green. This guide is org-wide; a repo may ad
   `@commitlint/config-conventional`) on every PR. Run `npm install` once so the `commit-msg`
   git hook lints locally before you push.
 - **Keep the runtime tree lean.** New runtime dependencies are rarely justified in a fork —
-  the program exists to shrink dependency risk, not grow it.
+  we fork to shrink dependency risk, not grow it.
 - **Keep the dev tree lean too.** Prefer built-in `node:test` / `node:assert` over adding a
   third-party test runner. The dev tree runs in CI beside publish credentials.
 - **Fix forward, don't pin.** If a dependency major breaks a fork, adopt the new major and fix
@@ -73,4 +73,4 @@ New forks follow the shared template so they inherit the whole pipeline:
 7. A human then enables the **Renovate GitHub App** and runs **`npm trust`** to configure the
    trusted publisher (both are 2FA-gated and can't be automated).
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full program model.
+See [`CLAUDE.md`](./CLAUDE.md) for the full model.

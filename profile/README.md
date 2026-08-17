@@ -9,10 +9,17 @@ packages, publishes them under the [`@unabandoned/*`](https://www.npmjs.com/org/
 npm scope, and points [Renovate](https://docs.renovatebot.com/) at them so the whole tree
 stays green.
 
+This org is a holding area, not a mission: the packages here are ones **our own projects
+depend on**, forked and parked together instead of scattered through the organization where
+those projects live. They're published, documented and drop-in, so anyone downstream of the
+same abandoned libraries is welcome to use them — but the catalog grows from our dependency
+trees, not from a survey of the ecosystem.
+
 ## What gets forked
 
-The trigger is **abandonment + any outdated dependency** — not a live CVE. A CVE only
-changes the *timeline* (publish immediately), never *whether* we act.
+Given a package our projects already pull in, the trigger is **abandonment + any outdated
+dependency** — not a live CVE. A CVE only changes the *timeline* (publish immediately), never
+*whether* we act.
 
 | Situation | Action |
 |-----------|--------|
@@ -85,4 +92,4 @@ verdict. A machine-readable copy is at
 ## Reporting a vulnerability
 
 See [`SECURITY.md`](https://github.com/unabandoned/.github/blob/main/SECURITY.md). Reporting
-CVEs in these trees — and getting a fix shipped fast — is the whole point of the program.
+CVEs in these trees — and getting a fix shipped fast — is the whole point of forking it.
