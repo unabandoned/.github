@@ -38,8 +38,9 @@ upstream:
 summary: >-
   One-sentence description of what this package does.
 
-# REQUIRED — why WE carry a fork of it, in program terms (abandoned + outdated
-# tree). This is the rationale the dashboard shows next to the package.
+# REQUIRED — why WE carry a fork of it: which of our projects reaches it, and
+# that it is abandoned with an outdated tree. This is the rationale the dashboard
+# shows next to the package.
 why-forked: >-
   Abandoned upstream while carrying outdated transitive dependencies; forked so
   Renovate keeps the tree current for the consumers that pull it in transitively.

@@ -1,8 +1,9 @@
 # unabandoned/.github
 
-Org-level defaults for the [`unabandoned`](https://github.com/unabandoned) maintained-fork
-program. GitHub serves the community-health files here to any `unabandoned/*` repository that
-doesn't define its own.
+Org-level defaults for the [`unabandoned`](https://github.com/unabandoned) org — where the
+abandoned dependencies our projects pull in get forked and parked, instead of cluttering the
+organization those projects live in. GitHub serves the community-health files here to any
+`unabandoned/*` repository that doesn't define its own.
 
 ## Contents
 
@@ -19,9 +20,9 @@ doesn't define its own.
   it now lives in [`unabandoned/recon`](https://github.com/unabandoned/recon), which derives
   the same facts with error states, double-derivation and integrity checks, and adds history,
   a work queue and repository comparison.
-- **`CLAUDE.md`** — program guidance for Claude Code in any of these repos.
+- **`CLAUDE.md`** — org-level guidance for Claude Code in any of these repos.
 - **Community-health files** — `SECURITY.md`, `CONTRIBUTING.md`, `SUPPORT.md`, `CODEOWNERS`,
   issue/PR templates, `FUNDING.yml`, inherited org-wide.
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) to add a new fork and [`CLAUDE.md`](./CLAUDE.md)
-for the full program model.
+for the full model.

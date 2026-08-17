@@ -6,7 +6,7 @@ overrides it with its own `SECURITY.md`.
 ## Supported versions
 
 Only the **latest major** of each package is supported at any given time. Because the whole
-point of the program is a current dependency tree, we do not backport fixes to older majors —
+whole point of a fork here is a current dependency tree, we do not backport fixes to older majors —
 upgrade to the latest major to receive security updates.
 
 ## Reporting a vulnerability

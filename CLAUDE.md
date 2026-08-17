@@ -1,19 +1,30 @@
-# CLAUDE.md — the `unabandoned` maintained-fork program
+# CLAUDE.md — the `unabandoned` org
 
 Guidance for Claude Code working in any `unabandoned/*` repository. This file is
 org-level; individual repos may add their own `CLAUDE.md` for package-specific notes.
 
 ## What this org is
 
-`unabandoned` de-risks abandoned npm dependencies by maintaining forks under the
-**`unabandoned` GitHub org** and publishing them to the **`@unabandoned/*` npm scope**.
-The motivating consumers pull these libraries transitively; once a package is abandoned,
-nobody upstream refreshes its dependency tree, so stale transitive deps rot and accumulate
-CVEs. We fork so **we** own the tree and keep it current with Renovate.
+**Our own projects come first. This org is where their abandoned dependencies get parked.**
 
-## Prime directive — fork whatever is abandoned AND has outdated deps
+Every package here is a dependency one of our projects pulls in — usually transitively — that
+upstream stopped maintaining. Once a package is abandoned nobody refreshes its dependency tree,
+so stale transitive deps rot and accumulate CVEs; we fork it so **we** own the tree and Renovate
+keeps it current. The forks live under the **`unabandoned` GitHub org** and publish to the
+**`@unabandoned/*` npm scope** for one reason: there are a lot of them, and they would bury the
+main organization where the actual projects live.
 
-The trigger for forking is **an abandoned repo carrying any outdated dependency**.
+Two things follow, and both are easy to get backwards:
+
+- **The trigger is "we depend on it", not "it is abandoned".** This is not an adoption program
+  for the ecosystem. An abandoned package nothing of ours reaches is not our problem.
+- **A fork is a filing decision, not a commitment ceremony.** Forking one more leaf is cheap and
+  routine — the cost that matters is how much *more* rot the tree drags in with it, which is
+  what recon is for.
+
+## When to fork — abandoned, ours, and carrying outdated deps
+
+Given a package our projects already depend on:
 
 - **Abandoned + any outdated dep → fork + publish** (adopt it; Renovate keeps the tree clean).
 - **Abandoned + zero outdated deps → leave alone** (truly frozen and clean — forking adds
@@ -69,8 +80,8 @@ Never echo, log, or commit these values.
 2. **`npm trust`** to configure each package's trusted publisher (npm ≥ 11.5.1, Node ≥ 22.14,
    interactive 2FA).
 
-(A third one-time human setting, not 2FA-gated but a repo toggle: in `unabandoned/.github`,
-**Settings → Pages → Source: GitHub Actions**, so the `dashboard` workflow can publish. See
+(A third one-time human setting, not 2FA-gated but a repo toggle: in `unabandoned/recon`,
+**Settings → Pages → Source: GitHub Actions**, so the build can publish the dashboard. See
 the dashboard section below.)
 
 ## Central dashboard
@@ -123,8 +134,7 @@ mechanisms have caught).
 ## Fix forward — don't pin
 
 When a major dependency bump breaks a fork, **adopt the new major and fix the few real
-breakages** rather than pinning to an old version. Pinning re-introduces exactly the rot the
-program exists to remove. (Precedent: xml-js adopting jasmine 6 / TypeScript 7.)
+breakages** rather than pinning to an old version. Pinning re-introduces exactly the rot we forked it to remove. (Precedent: xml-js adopting jasmine 6 / TypeScript 7.)
 
 ## Reusable-workflow layout
 
@@ -162,8 +172,9 @@ because the fork-skip decision ignores the preset-inherited value.
 
 - **Never embed the model identifier** (or any `claude-*` model ID) in commit messages, PR
   titles/bodies, code comments, or anything pushed to a repository. Keep it to chat only.
-- Fork trigger = **abandoned + any outdated dep** (not a CVE). Leave-alone is reserved for
-  abandoned repos whose tree is already fully current.
+- Fork trigger = **we depend on it** + abandoned + any outdated dep (not a CVE). Leave-alone is
+  reserved for abandoned repos whose tree is already fully current — and for anything nothing of
+  ours reaches, which was never ours to adopt.
 - Never hardcode or echo `PAT` / `NPM_SECRET`.
 - Fix forward, don't pin.
 - The **dashboard is generated, never hand-edited**. Editorial facts live in each fork's
