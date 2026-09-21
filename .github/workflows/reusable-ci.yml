@@ -13,6 +13,16 @@ on:
         description: 'Run `npm run build` before the test suite (TS/compiled forks).'
         type: boolean
         default: false
+      npm-version:
+        description: >-
+          Install this npm version globally before installing dependencies
+          (e.g. '11'). Empty means the npm bundled with each matrix Node
+          version, which is the right default. Set it only when a fork's tree
+          cannot be installed by a bundled npm - npm 10, which Node 20 and 22
+          still ship, fails on some modern dev trees (`Cannot read properties
+          of null (reading 'edgesOut')`).
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -34,6 +44,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
+      - if: ${{ inputs.npm-version != '' }}
+        run: npm install -g npm@${{ inputs.npm-version }}
       - run: npm install
       - if: ${{ inputs.has-build }}
         run: npm run build

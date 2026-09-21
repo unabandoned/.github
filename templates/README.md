@@ -13,6 +13,7 @@ changes to roll out deliberately (Renovate can bump the pinned ref).
 | default branch | `main` | `master` | `master` | `main` |
 | `node-versions` | `[20, 22, 24]` | `[20, 22, 24]` | `[20, 22, 24]` | `[22, 24]` (engines `>=22`) |
 | `has-build` (CI) | `false` | `false` | `false` (TS type-check runs inside `npm test`) | `true` |
+| `npm-version` (CI) | _(bundled)_ | _(bundled)_ | _(bundled)_ | `'11'` (npm 10 can't install vitest 4) |
 | `install-for-publish` | `false` | `false` | `false` | `false` (implied by the build) |
 | `build-for-publish` | `false` | `false` | `false` | `true` |
 
