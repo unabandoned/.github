@@ -3,6 +3,10 @@
 Copy-paste scaffolding for an `@unabandoned/*` fork. Everything shared lives in this repo's
 reusable workflows; a fork only needs the thin callers below plus its own source.
 
+There are **nine** callers. All nine belong in every fork — a fork missing one fails
+quietly rather than loudly, which is how four forks were onboarded without
+`renovate-config.yml` and went unvalidated until an audit caught it.
+
 Pin the `uses:` ref. These examples use `@main`; tag this repo and pin a version if you want
 changes to roll out deliberately (Renovate can bump the pinned ref).
 
@@ -126,6 +130,21 @@ jobs:
       pull-requests: write
     uses: unabandoned/.github/.github/workflows/reusable-release-security.yml@main
     secrets: inherit
+```
+
+### `renovate-config.yml`
+
+```yaml
+name: Renovate Config
+on:
+  push:
+    branches: [master]
+  pull_request:
+jobs:
+  renovate-config:
+    permissions:
+      contents: read
+    uses: unabandoned/.github/.github/workflows/reusable-renovate-config.yml@main
 ```
 
 ### `codeql.yml`
