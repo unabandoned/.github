@@ -3,8 +3,8 @@ name: reusable-publish
 # Self-bootstrapping OIDC-or-token publish, hardened against the dev tree.
 #
 # The token-holding job never installs the dev tree unless a caller opts in
-# (`install-for-publish: true`), and every `npm publish` runs with
-# `--ignore-scripts` so no lifecycle/install script executes beside the npm
+# (`install-for-publish` / `build-for-publish`), and every `npm publish` runs
+# with `--ignore-scripts` so no lifecycle/install script executes beside the npm
 # token. `vars.OIDC_ENABLED` and the secrets resolve against the CALLER repo.
 #
 # The caller MUST grant `id-token: write` on the job that calls this workflow.
@@ -13,6 +13,17 @@ on:
     inputs:
       install-for-publish:
         description: 'Run `npm install` before packing (forks that build at publish time).'
+        type: boolean
+        default: false
+      build-for-publish:
+        description: >-
+          Run `npm run build` before packing, for compiled forks whose published
+          files are generated rather than committed. Implies the install:
+          `npm publish --ignore-scripts` never runs a `prepublishOnly`/`prepack`
+          build, so a compiled fork that skipped this would publish an empty
+          tarball. Opting in puts the dev tree in the same job as `NPM_SECRET`
+          during the token-publish bootstrap - keep that tree small, and note it
+          is only reachable until OIDC takes over.
         type: boolean
         default: false
     secrets:
@@ -42,8 +53,12 @@ jobs:
       # Only install the dev tree when the fork needs it to pack. Forks that
       # ship committed source/build output skip this, keeping the dev tree away
       # from the token.
-      - if: ${{ inputs.install-for-publish }}
+      - if: ${{ inputs.install-for-publish || inputs.build-for-publish }}
         run: npm install
+
+      # Compiled forks only: produce the files `package.json#files` ships.
+      - if: ${{ inputs.build-for-publish }}
+        run: npm run build
 
       # ---- Steady state: OIDC configured (flag set) -> tokenless publish ----
       - name: Publish via OIDC

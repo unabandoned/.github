@@ -8,12 +8,14 @@ changes to roll out deliberately (Renovate can bump the pinned ref).
 
 ## Per-fork variation
 
-| Input | `events` | `buffer` / `randexp` / `path-browserify` | `xml-js` |
-|-------|----------|------------------------------------------|----------|
-| default branch | `main` | `master` | `master` |
-| `node-versions` | `[20, 22, 24]` | `[20, 22, 24]` | `[20, 22, 24]` |
-| `has-build` (CI) | `false` | `false` | `false` (TS type-check runs inside `npm test`) |
-| `install-for-publish` | `false` | `false` | `false` |
+| Input | `events` | `buffer` / `randexp` / `path-browserify` | `xml-js` | `composerize-ts` |
+|-------|----------|------------------------------------------|----------|------------------|
+| default branch | `main` | `master` | `master` | `main` |
+| `node-versions` | `[20, 22, 24]` | `[20, 22, 24]` | `[20, 22, 24]` | `[22, 24]` (engines `>=22`) |
+| `has-build` (CI) | `false` | `false` | `false` (TS type-check runs inside `npm test`) | `true` |
+| `npm-version` (CI) | _(bundled)_ | _(bundled)_ | _(bundled)_ | `'11'` (npm 10 can't install vitest 4) |
+| `install-for-publish` | `false` | `false` | `false` | `false` (implied by the build) |
+| `build-for-publish` | `false` | `false` | `false` | `true` |
 
 ## Workflow callers
 
@@ -70,6 +72,12 @@ jobs:
       install-for-publish: false
     secrets: inherit
 ```
+
+A **compiled** fork (one whose `package.json#files` ships generated output rather
+than committed files) passes `build-for-publish: true` instead. `npm publish`
+runs with `--ignore-scripts`, so a `prepublishOnly`/`prepack` build never fires —
+without that input the fork would publish a tarball with no build output in it.
+The input implies the install, so `install-for-publish` stays `false`.
 
 ### `release-please.yml`
 
