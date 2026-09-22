@@ -56,29 +56,23 @@ def list_repos(org: str) -> list[dict]:
     return [r for r in flat if not r.get('archived') and not r.get('private')]
 
 
-def upstream_from_metadata(org: str, repo: str) -> str | None:
-    """Read `upstream.repo` out of `.unabandoned.yml`, if the repo has one."""
+def read_upstream_block(org: str, repo: str) -> dict:
+    """Read the `upstream:` block out of `.unabandoned.yml`, if there is one."""
     try:
         text = gh('api', f'repos/{org}/{repo}/contents/.unabandoned.yml',
                   '-H', 'Accept: application/vnd.github.raw', raw=True)
     except CheckError:
-        return None
+        return {}
     try:
         import yaml
-        data = yaml.safe_load(text) or {}
-        value = (data.get('upstream') or {}).get('repo')
     except ImportError:
-        # PyYAML is preinstalled on GitHub runners; fall back to a flat scan so
-        # a local run without it degrades rather than dying.
-        value = None
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith('repo:'):
-                value = stripped.split(':', 1)[1].strip().strip('"\'')
-                break
-    if isinstance(value, str) and value.count('/') == 1 and ' ' not in value:
-        return value
-    return None
+        # PyYAML is preinstalled on GitHub runners. Without it we cannot read
+        # the acknowledgement list, and quietly reporting every acknowledged
+        # commit as new drift would be worse than saying so.
+        raise CheckError('PyYAML is required to read .unabandoned.yml')
+    data = yaml.safe_load(text) or {}
+    block = data.get('upstream')
+    return block if isinstance(block, dict) else {}
 
 
 def check(org: str, repo: dict) -> dict:
@@ -91,12 +85,22 @@ def check(org: str, repo: dict) -> dict:
         # `orgs/{org}/repos` omits `parent`; ask for the repo directly before
         # concluding there is no upstream.
         parent = (gh('api', f'repos/{org}/{name}') or {}).get('parent', {}).get('full_name')
+    block = read_upstream_block(org, name)
     source = 'fork parent'
     if not parent:
-        parent = upstream_from_metadata(org, name)
-        source = 'metadata'
+        candidate = block.get('repo')
+        if isinstance(candidate, str) and candidate.count('/') == 1:
+            parent, source = candidate, 'metadata'
     if not parent:
         return {'repo': name, 'state': 'no-upstream'}
+
+    # Commits already looked at and consciously not pulled. Matched on prefix
+    # so a short sha in the metadata still matches the full one from the API.
+    reviewed = {
+        str(e.get('sha', '')).lower(): e
+        for e in (block.get('reviewed') or [])
+        if isinstance(e, dict) and e.get('sha')
+    }
 
     up_owner, up_name = parent.split('/', 1)
     theirs = (gh('api', f'repos/{parent}') or {}).get('default_branch')
@@ -105,50 +109,109 @@ def check(org: str, repo: dict) -> dict:
 
     cmp = gh('api', f'repos/{org}/{name}/compare/{ours}...{up_owner}:{up_name}:{theirs}')
     ahead = cmp.get('ahead_by', 0)
-    commits = [
-        {
+
+    new: list[dict] = []
+    acked: list[dict] = []
+    seen_shas: set[str] = set()
+    for c in (cmp.get('commits') or []):
+        full = c['sha'].lower()
+        seen_shas.add(full)
+        entry = {
             'sha': c['sha'][:8],
             'date': c['commit']['committer']['date'][:10],
             'author': (c['commit']['author'] or {}).get('name', '?'),
             'title': c['commit']['message'].split('\n')[0],
         }
-        for c in (cmp.get('commits') or [])
+        match = next((v for k, v in reviewed.items() if full.startswith(k)), None)
+        if match:
+            entry['decision'] = match.get('decision', 'declined')
+            entry['note'] = match.get('note', '')
+            acked.append(entry)
+        else:
+            new.append(entry)
+
+    # An acknowledgement that no longer matches anything upstream is stale -
+    # usually a force-push or a rebase. Surface it so the file stays honest.
+    stale = [
+        sha for sha in reviewed
+        if not any(full.startswith(sha) for full in seen_shas)
     ]
+
     return {
         'repo': name,
-        'state': 'drifted' if ahead else 'clean',
+        'state': 'drifted' if new else ('acknowledged' if acked else 'clean'),
         'upstream': parent,
         'upstream_branch': theirs,
         'our_branch': ours,
         'behind_by': ahead,
-        'commits': commits,
+        'commits': new,
+        'acknowledged': acked,
+        'stale_acks': stale,
         'resolved_via': source,
     }
 
 
 def render(results: list[dict], errors: list[dict], org: str) -> str:
     drifted = [r for r in results if r['state'] == 'drifted']
+    acked_only = [r for r in results if r['state'] == 'acknowledged']
     clean = [r for r in results if r['state'] == 'clean']
     none = [r for r in results if r['state'] == 'no-upstream']
+    stale = [r for r in results if r.get('stale_acks')]
+
+    def table(rows: list[dict], upstream: str, with_decision: bool = False) -> list[str]:
+        head = '| Date | Commit | Author | Title |'
+        sep = '|---|---|---|---|'
+        if with_decision:
+            head = '| Date | Commit | Title | Decision |'
+            sep = '|---|---|---|---|'
+        out = [head, sep]
+        for c in rows:
+            title = c['title'].replace('|', '\\|')
+            link = f'[`{c["sha"]}`](https://github.com/{upstream}/commit/{c["sha"]})'
+            if with_decision:
+                note = (c.get('note') or '').replace('|', '\\|')
+                decision = f'**{c.get("decision", "declined")}**' + (f' — {note}' if note else '')
+                out.append(f'| {c["date"]} | {link} | {title} | {decision} |')
+            else:
+                out.append(f'| {c["date"]} | {link} | {c["author"]} | {title} |')
+        return out
 
     out: list[str] = []
     if drifted:
-        out.append(f'**{len(drifted)} fork(s) behind upstream.**\n')
+        out.append(f'**{len(drifted)} fork(s) have new upstream commits.**\n')
     elif errors:
-        out.append('**No drift found, but some repos could not be checked — see below.**\n')
+        out.append('**No new drift, but some repos could not be checked — see below.**\n')
     else:
-        out.append('**No forks are behind upstream.**\n')
+        out.append('**No new upstream commits anywhere.**\n')
 
     for r in drifted:
-        out.append(f'### `{r["repo"]}` — {r["behind_by"]} commit(s) behind [`{r["upstream"]}`](https://github.com/{r["upstream"]})\n')
-        out.append('| Date | Commit | Author | Title |')
-        out.append('|---|---|---|---|')
-        for c in r['commits']:
-            title = c['title'].replace('|', '\\|')
-            out.append(f'| {c["date"]} | [`{c["sha"]}`](https://github.com/{r["upstream"]}/commit/{c["sha"]}) | {c["author"]} | {title} |')
+        out.append(f'### `{r["repo"]}` — {len(r["commits"])} new commit(s) from '
+                   f'[`{r["upstream"]}`](https://github.com/{r["upstream"]})\n')
+        out += table(r['commits'], r['upstream'])
         out.append('')
-        out.append('Review these before pulling: upstream CI, funding and lint config usually '
-                   'conflicts with what this org standardises on, and is not worth taking.\n')
+        if r.get('acknowledged'):
+            out.append(f'<details><summary>Already reviewed on this repo '
+                       f'({len(r["acknowledged"])})</summary>\n')
+            out += table(r['acknowledged'], r['upstream'], with_decision=True)
+            out.append('\n</details>\n')
+        out.append('Upstream CI, funding and lint config usually conflicts with what this org '
+                   'standardises on and is not worth taking. To stop a commit being reported '
+                   'again, record the decision in that repo\'s `.unabandoned.yml`:\n')
+        out.append('```yaml')
+        out.append('upstream:')
+        out.append('  reviewed:')
+        out.append(f'    - sha: {r["commits"][0]["sha"]}')
+        out.append('      decision: declined   # or: deferred')
+        out.append('      note: why')
+        out.append('```\n')
+
+    if stale:
+        out.append('### Stale acknowledgements\n')
+        out.append('These shas are recorded as reviewed but no longer appear upstream — '
+                   'usually a force-push or rebase. Worth pruning.\n')
+        for r in stale:
+            out.append(f'- `{r["repo"]}`: ' + ', '.join(f'`{s}`' for s in r['stale_acks']))
+        out.append('')
 
     if errors:
         out.append(f'### Could not be checked ({len(errors)})\n')
@@ -158,7 +221,11 @@ def render(results: list[dict], errors: list[dict], org: str) -> str:
         out.append('')
 
     out.append('<details>')
-    out.append(f'<summary>Up to date ({len(clean)}) and no upstream ({len(none)})</summary>\n')
+    out.append(f'<summary>Fully reviewed ({len(acked_only)}), up to date ({len(clean)}), '
+               f'no upstream ({len(none)})</summary>\n')
+    if acked_only:
+        out.append('**Behind upstream, but every commit reviewed:** '
+                   + ', '.join(f'`{r["repo"]}` ({len(r["acknowledged"])})' for r in acked_only) + '\n')
     if clean:
         out.append('**Up to date:** ' + ', '.join(f'`{r["repo"]}`' for r in clean) + '\n')
     if none:
@@ -196,6 +263,7 @@ def main() -> int:
             errors.append({'repo': repo['name'], 'error': f'{type(exc).__name__}: {exc}'})
 
     drifted = [r for r in results if r['state'] == 'drifted']
+    stale = sum(len(r.get('stale_acks') or []) for r in results)
     markdown = render(results, errors, args.org)
 
     if args.md_path:
@@ -207,7 +275,8 @@ def main() -> int:
     if not args.md_path and not args.json_path:
         print(markdown)
 
-    print(f'checked={len(repos)} drifted={len(drifted)} errors={len(errors)}', file=sys.stderr)
+    print(f'checked={len(repos)} drifted={len(drifted)} stale_acks={stale} '
+          f'errors={len(errors)}', file=sys.stderr)
     return 1 if errors else 0
 
 

@@ -7,6 +7,11 @@ name: upstream-drift
 # It reports rather than acts: upstream CI, funding and lint config routinely
 # conflicts with what this org standardises on, so what to pull is a judgement
 # call, not something to automate.
+#
+# Only NEW commits are reported. Once a commit is recorded under
+# `upstream.reviewed` in a fork's `.unabandoned.yml`, it stops appearing, so a
+# report that stays open means something genuinely changed rather than the same
+# declined commits re-listed every month.
 on:
   schedule:
     # Day after release-cut (0 6 1 * *), so a drift report lands against a tree
@@ -41,7 +46,9 @@ jobs:
           with open(os.environ['RUNNER_TEMP'] + '/drift.json') as fh:
               data = json.load(fh)
           drifted = [r for r in data['results'] if r['state'] == 'drifted']
+          stale = sum(len(r.get('stale_acks') or []) for r in data['results'])
           print('drifted=%d' % len(drifted))
+          print('stale=%d' % stale)
           print('errors=%d' % len(data['errors']))
           PY
 
@@ -49,6 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT }}
           DRIFTED: ${{ steps.check.outputs.drifted }}
+          STALE: ${{ steps.check.outputs.stale }}
           ERRORS: ${{ steps.check.outputs.errors }}
         run: |
           TITLE="Upstream drift report"
@@ -57,12 +65,14 @@ jobs:
             --search "$TITLE in:title" --json number,title \
             --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
 
-          if [ "$DRIFTED" = "0" ] && [ "$ERRORS" = "0" ]; then
+          # Stale acknowledgements count as something to act on: an entry that
+          # no longer matches upstream is suppressing nothing and should be pruned.
+          if [ "$DRIFTED" = "0" ] && [ "$ERRORS" = "0" ] && [ "$STALE" = "0" ]; then
             # Nothing to act on. Close a stale report rather than leaving an
             # issue open that no longer describes reality.
             if [ -n "$EXISTING" ]; then
               gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
-                --body "No forks are behind upstream as of this run. Closing; a future run will reopen a report if that changes."
+                --body "No new upstream commits as of this run — anything still outstanding is recorded as reviewed in the fork's \`.unabandoned.yml\`. Closing; a future run files a new report when upstream moves again."
               gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY"
             fi
             echo "No drift and no errors; nothing to file."
