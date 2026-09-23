@@ -53,16 +53,20 @@ near zero.
   `autorelease: pending`) on the 1st of each month (`cron: '0 6 1 * *'`) or on manual dispatch.
 - **CVE = immediate** — `release-security` fast-tracks: a merged PR labelled `security`
   refreshes and merges the release PR right away.
-- Changelog is **consumer-facing-first**: `feat`/`fix`/`perf`/`revert`/`deps` appear; the
-  dev-only types (`build`/`chore`/`ci`/`refactor`/`docs`/`test`/`style`) are `hidden`.
-  In release-please a **visible section is a releasable one**, so leaving them visible meant a
-  Renovate devDependency bump published a new version whose shipped files were byte-identical —
-  33 of them in one night. Hidden types neither release nor appear in the changelog.
-- **This puts weight on picking the right type.** Anything that changes what consumers
-  receive must be `fix`/`feat`/`perf`, never `refactor` or `build` — a shipped-behaviour
-  change committed as `refactor:` will now sit unreleased indefinitely. Runtime dependency
-  bumps are safe: Renovate labels those `fix` (see the `matchDepTypes: [dependencies]` rule in
-  `unabandoned/renovate-config`), so they still release and still show under Bug Fixes.
+- Changelog is **consumer-facing-first**. In release-please a **visible section is a
+  releasable one**, so the split is by whether a type can change what a consumer executes:
+  - **Visible, and therefore releasing** — `feat`, `fix`, `perf`, `revert`, `deps`, and also
+    `build`, `refactor` and `docs`. The last three can all reach consumers: `build` changes
+    compiled output, `refactor` changes shipped source, and npm always publishes the README.
+  - **Hidden, and therefore not releasing** — `chore`, `ci`, `test`, `style`. None of these
+    changes what a consumer runs.
+  Leaving every type visible was how one Renovate devDependency bump opened 30 release PRs in
+  a night, each proposing a version whose shipped files were byte-identical.
+- **Pick the type by what ships, not by what the work felt like.** Runtime dependency bumps
+  are safe automatically — Renovate labels those `fix` (see the `matchDepTypes: [dependencies]`
+  rule in `unabandoned/renovate-config`). But a repo-config or tooling change committed as
+  `fix:` will publish a pointless version, and that is not hypothetical: the very commit that
+  introduced this policy was mistyped `fix:` and cut 19 empty releases.
 
 ## Publishing
 
