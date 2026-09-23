@@ -53,10 +53,16 @@ near zero.
   `autorelease: pending`) on the 1st of each month (`cron: '0 6 1 * *'`) or on manual dispatch.
 - **CVE = immediate** — `release-security` fast-tracks: a merged PR labelled `security`
   refreshes and merges the release PR right away.
-- Changelog is **consumer-facing-first**: `feat`/`fix`/`perf`/`revert` on top; all dependency
-  churn (`deps`/`build`/`chore`/`ci`/`refactor`/`docs`/`test`/`style`) is routed into a
-  "Dependencies & maintenance" section that the release-please post-step folds into a
-  collapsible `<details>` in the GitHub release notes.
+- Changelog is **consumer-facing-first**: `feat`/`fix`/`perf`/`revert`/`deps` appear; the
+  dev-only types (`build`/`chore`/`ci`/`refactor`/`docs`/`test`/`style`) are `hidden`.
+  In release-please a **visible section is a releasable one**, so leaving them visible meant a
+  Renovate devDependency bump published a new version whose shipped files were byte-identical —
+  33 of them in one night. Hidden types neither release nor appear in the changelog.
+- **This puts weight on picking the right type.** Anything that changes what consumers
+  receive must be `fix`/`feat`/`perf`, never `refactor` or `build` — a shipped-behaviour
+  change committed as `refactor:` will now sit unreleased indefinitely. Runtime dependency
+  bumps are safe: Renovate labels those `fix` (see the `matchDepTypes: [dependencies]` rule in
+  `unabandoned/renovate-config`), so they still release and still show under Bug Fixes.
 
 ## Publishing
 
