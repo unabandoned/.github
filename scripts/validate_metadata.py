@@ -31,6 +31,10 @@ except ModuleNotFoundError:  # pragma: no cover - surfaced as a clear CI message
 SCHEMA_VERSION = 1
 SCOPE_PREFIX = "@unabandoned/"
 VALID_STATUSES = ("active", "seeking-replacement", "deprecated")
+# `declined` = looked at, deliberately not pulled. `deferred` = worth pulling,
+# not yet done. Both silence the monthly drift report for that commit; only
+# `deferred` is a standing to-do.
+REVIEW_DECISIONS = ("declined", "deferred")
 
 
 def _is_owner_repo(value: Any) -> bool:
@@ -39,6 +43,15 @@ def _is_owner_repo(value: Any) -> bool:
         return False
     parts = value.split("/")
     return len(parts) == 2 and all(parts) and " " not in value
+
+
+def _is_sha(value: Any) -> bool:
+    """A commit sha: hex, at least 7 characters, at most 40."""
+    return (
+        isinstance(value, str)
+        and 7 <= len(value) <= 40
+        and all(c in "0123456789abcdefABCDEF" for c in value)
+    )
 
 
 def validate(data: Any) -> list[str]:
@@ -103,6 +116,38 @@ def validate(data: Any) -> list[str]:
                         errors.append(
                             f"`used-by[{i}].{key}` is required and must be a "
                             "non-empty string"
+                        )
+
+    # upstream.reviewed — optional list of {sha, decision, note?}. Records that
+    # an upstream commit has been looked at and consciously not pulled, so the
+    # monthly drift report can separate new drift from drift already decided.
+    if isinstance(upstream, dict):
+        reviewed = upstream.get("reviewed")
+        if reviewed is not None:
+            if not isinstance(reviewed, list):
+                errors.append("`upstream.reviewed` must be a list when present")
+            else:
+                for i, entry in enumerate(reviewed):
+                    if not isinstance(entry, dict):
+                        errors.append(f"`upstream.reviewed[{i}]` must be a mapping")
+                        continue
+                    sha = entry.get("sha")
+                    if not isinstance(sha, str) or not _is_sha(sha):
+                        errors.append(
+                            f"`upstream.reviewed[{i}].sha` is required and must be "
+                            "a hex commit sha of at least 7 characters"
+                        )
+                    decision = entry.get("decision")
+                    if decision not in REVIEW_DECISIONS:
+                        errors.append(
+                            f"`upstream.reviewed[{i}].decision` must be one of "
+                            f"{', '.join(REVIEW_DECISIONS)} (got {decision!r})"
+                        )
+                    note = entry.get("note")
+                    if note is not None and (not isinstance(note, str) or not note.strip()):
+                        errors.append(
+                            f"`upstream.reviewed[{i}].note` must be a non-empty "
+                            "string when present"
                         )
 
     # tags — optional list of strings.
