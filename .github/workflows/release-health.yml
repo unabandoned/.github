@@ -1,0 +1,77 @@
+name: release-health
+
+# path-browserify published nothing for five weeks. Its release-please run
+# failed on every push in that window, package.json moved ahead of the last
+# tag, and npm stayed on the old version. Nothing said so - a scheduled job
+# that fails quietly looks exactly like one with nothing to do.
+#
+# Daily, not monthly like upstream-drift: drift is a judgement call that keeps,
+# a release pipeline that has stopped working is a thing to fix today.
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check every package's release pipeline
+        id: check
+        env:
+          # Needs read across the org and issue write here; the default
+          # GITHUB_TOKEN is scoped to this repo only.
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          set -o pipefail
+          python3 scripts/release_health.py \
+            --markdown "$RUNNER_TEMP/health.md" \
+            --json "$RUNNER_TEMP/health.json" && status=0 || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          with open(os.environ['RUNNER_TEMP'] + '/health.json') as fh:
+              data = json.load(fh)
+          print('unhealthy=%d' % len([r for r in data['results'] if r['state'] == 'unhealthy']))
+          print('errors=%d' % len(data['errors']))
+          PY
+
+      - name: File or update the report
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          UNHEALTHY: ${{ steps.check.outputs.unhealthy }}
+          ERRORS: ${{ steps.check.outputs.errors }}
+        run: |
+          TITLE="Release pipeline health"
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "$TITLE in:title" --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+
+          if [ "$UNHEALTHY" = "0" ] && [ "$ERRORS" = "0" ]; then
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
+                --body "Every package is releasing and published as of this run. Closing; a future run files a new report if that changes."
+              gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY"
+            fi
+            echo "All healthy; nothing to file."
+            exit 0
+          fi
+
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/health.md"
+            echo "Updated issue #$EXISTING"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/health.md"
+          fi
+
+      - name: Fail if any repo could not be checked
+        if: steps.check.outputs.status != '0'
+        run: |
+          echo "::error::One or more repos could not be checked - see the issue body. A failed check is not a healthy check."
+          exit 1
