@@ -32,9 +32,11 @@ SCHEMA_VERSION = 1
 SCOPE_PREFIX = "@unabandoned/"
 VALID_STATUSES = ("active", "seeking-replacement", "deprecated")
 # `declined` = looked at, deliberately not pulled. `deferred` = worth pulling,
-# not yet done. Both silence the monthly drift report for that commit; only
+# not yet done. `ported` = taken, but under a different sha (adapted, or
+# cherry-picked onto our history), so the drift report cannot see that the
+# fork has it. All three silence the drift report for that commit; only
 # `deferred` is a standing to-do.
-REVIEW_DECISIONS = ("declined", "deferred")
+REVIEW_DECISIONS = ("declined", "deferred", "ported")
 
 
 def _is_owner_repo(value: Any) -> bool:
@@ -119,8 +121,8 @@ def validate(data: Any) -> list[str]:
                         )
 
     # upstream.reviewed — optional list of {sha, decision, note?}. Records that
-    # an upstream commit has been looked at and consciously not pulled, so the
-    # monthly drift report can separate new drift from drift already decided.
+    # an upstream commit has been looked at and decided on, so the
+    # drift report can separate new drift from drift already decided.
     if isinstance(upstream, dict):
         reviewed = upstream.get("reviewed")
         if reviewed is not None:
