@@ -1,8 +1,10 @@
 name: upstream-drift
 
 # A fork can be perfectly maintained here and still be missing commits its
-# upstream made after we forked it. This checks every repo in the org monthly
-# and keeps a single issue up to date with the answer.
+# upstream made after we forked it. This checks every repo in the org weekly
+# and keeps a single issue up to date with the answer. The repo list is read
+# from the org on every run, so a newly created fork is covered from its first
+# week without being registered anywhere.
 #
 # It reports rather than acts: upstream CI, funding and lint config routinely
 # conflicts with what this org standardises on, so what to pull is a judgement
@@ -11,12 +13,13 @@ name: upstream-drift
 # Only NEW commits are reported. Once a commit is recorded under
 # `upstream.reviewed` in a fork's `.unabandoned.yml`, it stops appearing, so a
 # report that stays open means something genuinely changed rather than the same
-# declined commits re-listed every month.
+# declined commits re-listed every week.
 on:
   schedule:
-    # Day after release-cut (0 6 1 * *), so a drift report lands against a tree
-    # that has just been released rather than mid-cut.
-    - cron: '0 6 2 * *'
+    # Weekly, Monday 06:00 UTC. Monthly let an upstream fix (pbkdf2's
+    # GHSA-477h-4r7f-fvrx) sit unseen for most of a month; a week is short
+    # enough to port a fix before the next monthly release-cut (0 6 1 * *).
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
