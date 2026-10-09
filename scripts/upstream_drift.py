@@ -201,7 +201,7 @@ def render(results: list[dict], errors: list[dict], org: str) -> str:
         out.append('upstream:')
         out.append('  reviewed:')
         out.append(f'    - sha: {r["commits"][0]["sha"]}')
-        out.append('      decision: declined   # or: deferred')
+        out.append('      decision: declined   # or: deferred, ported')
         out.append('      note: why')
         out.append('```\n')
 
