@@ -88,6 +88,9 @@ def validate(data: Any) -> list[str]:
         reason = upstream.get("reason")
         if not isinstance(reason, str) or not reason.strip():
             errors.append("`upstream.reason` is required and must be a non-empty string")
+        branch = upstream.get("branch")
+        if branch is not None and (not isinstance(branch, str) or not branch.strip()):
+            errors.append("`upstream.branch` must be a non-empty string when present")
 
     # summary / why-forked — required prose.
     for field in ("summary", "why-forked"):
