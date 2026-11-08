@@ -9,6 +9,14 @@ Resolving the upstream: GitHub's own fork parent when there is one, else
 `upstream.repo` from `.unabandoned.yml`. Repos with neither (the org's own
 infra) are reported as such rather than silently skipped.
 
+A fork made by cloning rather than GitHub's fork button has no parent, and
+GitHub's compare API only crosses repositories inside one fork network, so it
+404s for those. They are compared with git instead: a blobless fetch of both
+branches and `ours..theirs`, which is the same set of commits.
+
+`upstream.branch` in `.unabandoned.yml` overrides upstream's default branch,
+for a fork that follows a maintenance line (popper.js tracks `v1.x`).
+
 Reading the comparison: for `compare/OURS...upstream:repo:THEIRS`, `ahead_by`
 counts commits in the head (upstream) that the base (us) lacks. That is the
 number we want. `behind_by` is the opposite direction — our own fork work,
@@ -29,6 +37,7 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 ORG = 'unabandoned'
@@ -48,6 +57,34 @@ def gh(*args: str, raw: bool = False) -> Any:
     if proc.returncode != 0:
         raise CheckError((proc.stderr or proc.stdout).strip().splitlines()[-1] if (proc.stderr or proc.stdout).strip() else 'gh failed')
     return proc.stdout if raw else json.loads(proc.stdout or 'null')
+
+
+def git(*args: str, cwd: str) -> str:
+    proc = subprocess.run(('git',) + args, cwd=cwd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout).strip().splitlines()
+        raise CheckError(lines[-1] if lines else 'git failed')
+    return proc.stdout
+
+
+def git_compare(org: str, name: str, ours: str, parent: str, theirs: str) -> dict:
+    """The compare API's `ahead_by` and `commits`, computed with git."""
+    with tempfile.TemporaryDirectory() as tmp:
+        git('init', '--bare', '-q', cwd=tmp)
+        for remote, url, branch in (('ours', f'https://github.com/{org}/{name}.git', ours),
+                                    ('theirs', f'https://github.com/{parent}.git', theirs)):
+            git('remote', 'add', remote, url, cwd=tmp)
+            git('fetch', '-q', '--no-tags', '--filter=blob:none', remote,
+                f'+refs/heads/{branch}:refs/remotes/{remote}/{branch}', cwd=tmp)
+        out = git('log', '--reverse', '--format=%H%x00%cI%x00%an%x00%s',
+                  f'refs/remotes/ours/{ours}..refs/remotes/theirs/{theirs}', cwd=tmp)
+    commits = []
+    for line in out.splitlines():
+        sha, date, author, title = line.split('\x00', 3)
+        commits.append({'sha': sha, 'commit': {'committer': {'date': date},
+                                               'author': {'name': author},
+                                               'message': title}})
+    return {'ahead_by': len(commits), 'commits': commits}
 
 
 def list_repos(org: str) -> list[dict]:
@@ -103,11 +140,15 @@ def check(org: str, repo: dict) -> dict:
     }
 
     up_owner, up_name = parent.split('/', 1)
-    theirs = (gh('api', f'repos/{parent}') or {}).get('default_branch')
+    theirs = block.get('branch') if isinstance(block.get('branch'), str) else None
+    theirs = theirs or (gh('api', f'repos/{parent}') or {}).get('default_branch')
     if not theirs:
         raise CheckError(f'upstream {parent} has no default branch')
 
-    cmp = gh('api', f'repos/{org}/{name}/compare/{ours}...{up_owner}:{up_name}:{theirs}')
+    if source == 'fork parent':
+        cmp = gh('api', f'repos/{org}/{name}/compare/{ours}...{up_owner}:{up_name}:{theirs}')
+    else:
+        cmp = git_compare(org, name, ours, parent, theirs)
     ahead = cmp.get('ahead_by', 0)
 
     new: list[dict] = []
